@@ -7,3 +7,4 @@ protobuf
 python-dotenv
 python_docx
 tqdm
+google-generativeai

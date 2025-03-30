@@ -343,6 +343,11 @@ class Docx_helper(ABC):
         fig.figimage(rgba2, 200, 300)
         return fig
 
+    def get_numerical_columns(self, df: pd.DataFrame) -> list:
+        # Get the numerical columns from the dataframe
+        numerical_columns = df.select_dtypes(include=[np.number]).columns.tolist()
+        return numerical_columns
+
     def run_word_creation(self,
                           combined_df: pd.DataFrame,
                           stats_df: pd.DataFrame,
@@ -352,6 +357,8 @@ class Docx_helper(ABC):
                           start_cadet: str = None,
                           names_to_hashes: bool=False,
                           is_socio: bool = True):
+
+        self.calculate_averages(self.get_numerical_columns(combined_df), old_stats_df, stats_df, combined_df)
 
         reached_start_cadet = start_cadet is None
         # create word file for every person
@@ -442,3 +449,50 @@ class Docx_helper(ABC):
         with open("names_to_hashes.txt", "w", encoding="utf-8") as f:
             f.write("")
 
+    def calculate_averages(self, numerical_columns, old_stats_df, stats_df, combined_df):
+
+        averages = {}
+
+        for person_name, group in combined_df.groupby("name"):
+            averages[person_name] = {"old": {}, "new": {}}
+
+            for category in numerical_columns:
+                # Calculate new averages
+                avg_new = group[category].mean()
+                averages[person_name]["new"][category] = avg_new
+
+                # Calculate old averages if old_stats_df is provided
+                if old_stats_df is not None:
+                    old_avg = old_stats_df[(old_stats_df["name"] == person_name) &
+                            (old_stats_df["category"] == category)]["mean"]
+                    if not old_avg.empty:
+                        averages[person_name]["old"][category] = old_avg.values[0]
+                    else:
+                        averages[person_name]["old"][category] = None
+                else:
+                    averages[person_name]["old"][category] = None
+
+        return averages
+
+
+    def run_word_creation_new(self,
+                          combined_df: pd.DataFrame,
+                          stats_df: pd.DataFrame,
+                          name_to_classification: dict = None,
+                          old_stats_df=None,
+                          verbose: bool = True,
+                          start_cadet: str = None,
+                          names_to_hashes: bool=False,
+                          is_socio: bool = True):
+        
+        reached_start_cadet = start_cadet is None
+        averages = self.calculate_averages(self.get_numerical_columns(combined_df), old_stats_df, stats_df, combined_df)
+        # create word file for every person
+        for df in tqdm(combined_df.groupby("name"), disable=not verbose):
+            person_name = df[0]
+            
+            print(f"Creating word file for {person_name}")
+            print(averages[person_name]["new"])
+            
+            self.create_word_file(averages[person_name], person_name, n=df[1].shape[0], names_to_hashes=names_to_hashes)
+        

@@ -1,0 +1,4 @@
+flow.md
+*.pyc
+*__pychache__*
+*sociometry_output*
