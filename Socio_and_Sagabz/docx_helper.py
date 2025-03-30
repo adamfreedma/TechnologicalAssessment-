@@ -1,5 +1,8 @@
 from abc import ABC, abstractmethod
+from cProfile import label
 from io import BytesIO
+from pydoc import Doc
+from sre_parse import CATEGORIES
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -14,6 +17,8 @@ from docx.oxml.ns import qn
 from column_constants import SIGMAS
 from docxtpl import DocxTemplate
 from docx.oxml import OxmlElement
+
+import constants
 
 ADD_IN_END_OF_SENTENCE: str = "."
 IS_SOCIO = True
@@ -232,6 +237,98 @@ class Docx_helper(ABC):
 
         doc.render(context=context)
         doc.save(format_file_name)
+    
+    def find_table_cell_by_tag(self, doc: Document, tag: str) -> object:
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    if tag in cell.text:
+                        return cell
+    
+    def fill_row(self, doc: Document, averages, type):
+            for category in constants.TABLE_CATEGORIES:
+                cell = self.find_table_cell_by_tag(doc, type + category)
+                if cell is not None:
+                    # fill the cell with the data
+                    cell.paragraphs[0].clear()
+                    if averages[category] is not None:
+                        cell.paragraphs[0].add_run(f"{averages[category]:.2f}")
+                    else:
+                        cell.paragraphs[0].add_run(" - ")
+    
+    def fill_table(self, doc: Document, averages, person_name):
+        # find the table in the document and fill it with data
+        old_data = averages[person_name]["old"]
+        new_data = averages[person_name]["new"]
+        
+        # fill the table with the data
+        self.fill_row(doc, old_data, "old ")
+        self.fill_row(doc, new_data, "new ")
+    
+    def create_main_graph(self, averages, stds, person_name, path_to_save):
+        fig = plt.figure()
+
+
+        # Plot settings
+        y_pos = np.arange(len(constants.MAIN_CATEGORIES))
+        fig, ax = plt.subplots()
+        avg_values = [averages[person_name]["new"].get(category, 0) for category in constants.MAIN_CATEGORIES]
+        total_avg_values = [averages["total"]["new"].get(category, 0) for category in constants.MAIN_CATEGORIES]
+        std_values = [stds[person_name]["new"].get(category, 0) for category in constants.MAIN_CATEGORIES]
+        ax.barh(y_pos, total_avg_values, align='center', color='skyblue', edgecolor='black', label='ממוצע מחזורי'[::-1])
+        ax.errorbar(avg_values, y_pos, xerr=std_values, fmt='o', color='blue', label='עוצמה + פיזור'[::-1])
+
+        # Labels and formatting
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(constants.CATEGORY_NAME_DICT[constants.MAIN_CATEGORIES[i]][::-1] for i in range(len(constants.MAIN_CATEGORIES)))
+        ax.legend()
+        plt.gca().invert_yaxis()  # Invert y-axis to match typical bar chart order
+
+        # save the figure
+        plt.savefig(path_to_save, bbox_inches='tight')
+        plt.close(fig)
+
+        
+    def create_word_file_new(self, averages, stds, person_name, n=None, names_to_hashes=False):
+        if names_to_hashes:
+            with open("names_to_hashes.txt", "a", encoding="utf-8") as f:
+                f.write(f"{person_name} => {self.my_hash(person_name)}\n")
+            title_to_save = f"{self.my_hash(person_name)} (N={n})".replace('"', '').replace("'", '') + ".docx"
+        else:
+            title_to_save = f"{person_name} (N={n})".replace('"', '').replace("'", '') + ".docx"
+            
+        path_to_save = os.path.join(self.word_output_dir, title_to_save)
+
+        doc = Document(self.file_format_path)
+
+        # title and font
+        title = doc.paragraphs[0]
+        if names_to_hashes:
+            title.text += self.my_hash(person_name)
+        else:
+            title.text += person_name
+        if n is not None:
+            title.text += f" (N={n})"
+        title.runs[0] = "David"
+        title.runs[0].underline = True
+        
+        self.fill_table(doc, averages, person_name)
+
+        # add the main graph to the table
+        TMP_FILE_PATH = "tmp.png"
+        self.create_main_graph(averages, stds, person_name, TMP_FILE_PATH)
+
+        # load png
+        cell = self.find_table_cell_by_tag(doc, "main_graph")
+        cell.paragraphs[0].clear()
+        cell.add_paragraph().add_run().add_picture(TMP_FILE_PATH, height=Inches(1.9))
+        cell.paragraphs[1].alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+
+        # remove png as it is no longer needed
+        os.remove(TMP_FILE_PATH)
+
+        # Save the document
+        doc.save(path_to_save)
 
     def create_word_file(self, hists, classification_df, person_name, n=None, names_to_hashes=False):
         if names_to_hashes:
@@ -358,7 +455,6 @@ class Docx_helper(ABC):
                           names_to_hashes: bool=False,
                           is_socio: bool = True):
 
-        self.calculate_averages(self.get_numerical_columns(combined_df), old_stats_df, stats_df, combined_df)
 
         reached_start_cadet = start_cadet is None
         # create word file for every person
@@ -452,6 +548,29 @@ class Docx_helper(ABC):
     def calculate_averages(self, numerical_columns, old_stats_df, stats_df, combined_df):
 
         averages = {}
+        stds = {}
+
+        # Calculate stds for each person in the combined_df
+        for person_name, group in combined_df.groupby("name"):
+            stds[person_name] = {"old": {}, "new": {}}
+
+            for category in numerical_columns:
+                # Calculate new stds
+                std_new = group[category].std()
+                stds[person_name]["new"][category] = std_new
+
+                # Calculate old stds if old_stats_df is provided
+                if old_stats_df is not None:
+                    old_std = old_stats_df[(old_stats_df["name"] == person_name) &
+                        (old_stats_df["category"] == category)]["std"]
+                    if not old_std.empty:
+                        stds[person_name]["old"][category] = old_std.values[0]
+                    else:
+                        stds[person_name]["old"][category] = None
+                else:
+                    stds[person_name]["old"][category] = None
+
+        # Calculate averages and stds for each person in the combined_df
 
         for person_name, group in combined_df.groupby("name"):
             averages[person_name] = {"old": {}, "new": {}}
@@ -464,7 +583,7 @@ class Docx_helper(ABC):
                 # Calculate old averages if old_stats_df is provided
                 if old_stats_df is not None:
                     old_avg = old_stats_df[(old_stats_df["name"] == person_name) &
-                            (old_stats_df["category"] == category)]["mean"]
+                        (old_stats_df["category"] == category)]["mean"]
                     if not old_avg.empty:
                         averages[person_name]["old"][category] = old_avg.values[0]
                     else:
@@ -472,7 +591,19 @@ class Docx_helper(ABC):
                 else:
                     averages[person_name]["old"][category] = None
 
-        return averages
+        # Add a "total" person with the average of everyone
+        averages["total"] = {"old": {}, "new": {}}
+        for category in numerical_columns:
+            avg_total = combined_df[category].mean()
+            averages["total"]["new"][category] = avg_total
+
+            if old_stats_df is not None:
+                old_avg_total = old_stats_df[old_stats_df["category"] == category]["mean"].mean()
+                averages["total"]["old"][category] = old_avg_total
+            else:
+                averages["total"]["old"][category] = None
+
+        return averages, stds
 
 
     def run_word_creation_new(self,
@@ -486,13 +617,10 @@ class Docx_helper(ABC):
                           is_socio: bool = True):
         
         reached_start_cadet = start_cadet is None
-        averages = self.calculate_averages(self.get_numerical_columns(combined_df), old_stats_df, stats_df, combined_df)
+        averages, stds = self.calculate_averages(self.get_numerical_columns(combined_df), old_stats_df, stats_df, combined_df)
         # create word file for every person
         for df in tqdm(combined_df.groupby("name"), disable=not verbose):
             person_name = df[0]
             
-            print(f"Creating word file for {person_name}")
-            print(averages[person_name]["new"])
-            
-            self.create_word_file(averages[person_name], person_name, n=df[1].shape[0], names_to_hashes=names_to_hashes)
+            self.create_word_file_new(averages, stds, person_name, n=df[1].shape[0], names_to_hashes=names_to_hashes)
         

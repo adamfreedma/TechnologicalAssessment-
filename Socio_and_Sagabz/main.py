@@ -3,7 +3,7 @@ import argparse
 from run_sagabz_socio import RunSagzab, RunSocio
 import os
 
-FORMAT_PATH = os.getcwd() + r"\Formats\socio_format_for_classification.docx"
+FORMAT_PATH = os.getcwd() + r"\Formats\socio_format_new.docx"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
