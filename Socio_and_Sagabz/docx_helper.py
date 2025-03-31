@@ -244,6 +244,11 @@ class Docx_helper(ABC):
                 for cell in row.cells:
                     if tag in cell.text:
                         return cell
+                    
+    def find_paragraph_by_tag(self, doc: Document, tag: str) -> object:
+        for paragraph in doc.paragraphs:
+            if tag in paragraph.text:
+                return paragraph
     
     def fill_row(self, doc: Document, averages, type):
             for category in constants.TABLE_CATEGORIES:
@@ -256,18 +261,21 @@ class Docx_helper(ABC):
                     else:
                         cell.paragraphs[0].add_run(" - ")
     
-    def fill_table(self, doc: Document, averages, person_name):
+    def fill_table(self, doc: Document, averages, stds, person_name):
         # find the table in the document and fill it with data
         old_data = averages[person_name]["old"]
         new_data = averages[person_name]["new"]
+        stds_data = stds[person_name]["new"]
+        total_data = averages["total"]["new"]
         
         # fill the table with the data
         self.fill_row(doc, old_data, "old ")
         self.fill_row(doc, new_data, "new ")
+        self.fill_row(doc, stds_data, "std ")
+        self.fill_row(doc, total_data, "total ")
     
     def create_main_graph(self, averages, stds, person_name, path_to_save):
         fig = plt.figure()
-
 
         # Plot settings
         y_pos = np.arange(len(constants.MAIN_CATEGORIES))
@@ -288,6 +296,16 @@ class Docx_helper(ABC):
         plt.savefig(path_to_save, bbox_inches='tight')
         plt.close(fig)
 
+    def set_title(self, doc: Document, title: str):
+        # Set the title of the document
+        paragraph = self.find_paragraph_by_tag(doc, "title")
+        paragraph.clear()
+        paragraph.add_run(title)
+        paragraph.runs[0].bold = True
+        paragraph.runs[0].underline = True
+        paragraph.runs[0] = "David"
+        paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+
         
     def create_word_file_new(self, averages, stds, person_name, n=None, names_to_hashes=False):
         if names_to_hashes:
@@ -302,28 +320,19 @@ class Docx_helper(ABC):
         doc = Document(self.file_format_path)
 
         # title and font
-        title = doc.paragraphs[0]
-        if names_to_hashes:
-            title.text += self.my_hash(person_name)
-        else:
-            title.text += person_name
-        if n is not None:
-            title.text += f" (N={n})"
-        title.runs[0] = "David"
-        title.runs[0].underline = True
+        title_str = "N=" + str(n) + " ," + "שיקוף סוציומטרי - " + person_name + ", סמסטר " + str(constants.SEMESTER)
+        self.set_title(doc, title_str)
         
-        self.fill_table(doc, averages, person_name)
+        self.fill_table(doc, averages, stds, person_name)
 
         # add the main graph to the table
         TMP_FILE_PATH = "tmp.png"
         self.create_main_graph(averages, stds, person_name, TMP_FILE_PATH)
-
         # load png
         cell = self.find_table_cell_by_tag(doc, "main_graph")
         cell.paragraphs[0].clear()
         cell.add_paragraph().add_run().add_picture(TMP_FILE_PATH, height=Inches(1.9))
         cell.paragraphs[1].alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-
         # remove png as it is no longer needed
         os.remove(TMP_FILE_PATH)
 
@@ -616,7 +625,6 @@ class Docx_helper(ABC):
                           names_to_hashes: bool=False,
                           is_socio: bool = True):
         
-        reached_start_cadet = start_cadet is None
         averages, stds = self.calculate_averages(self.get_numerical_columns(combined_df), old_stats_df, stats_df, combined_df)
         # create word file for every person
         for df in tqdm(combined_df.groupby("name"), disable=not verbose):

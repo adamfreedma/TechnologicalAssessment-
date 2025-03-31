@@ -13,3 +13,4 @@ OUTPUT_PATH = "output/"
 
 MAIN_CATEGORIES = ["intrapersonal", "functioning in society", "leadership", "conduct", "academy"]
 TABLE_CATEGORIES = ["applicative knowledge", "functioning in society", "leadership", "conduct", "academy"]
+SEMESTER = "ב"
