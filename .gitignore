@@ -2,3 +2,7 @@ flow.md
 *.pyc
 *__pychache__*
 *sociometry_output*
+~$*
+*.xlsx
+names_to_hashes.txt
+settings.json
