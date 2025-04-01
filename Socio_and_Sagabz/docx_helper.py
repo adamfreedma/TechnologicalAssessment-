@@ -17,6 +17,8 @@ from docx.oxml.ns import qn
 from column_constants import SIGMAS
 from docxtpl import DocxTemplate
 from docx.oxml import OxmlElement
+from docx.shared import RGBColor
+
 
 import constants
 
@@ -250,23 +252,26 @@ class Docx_helper(ABC):
             if tag in paragraph.text:
                 return paragraph
     
-    def fill_row(self, doc: Document, averages, type):
-            for category in constants.TABLE_CATEGORIES:
-                cell = self.find_table_cell_by_tag(doc, type + category)
-                if cell is not None:
-                    # fill the cell with the data
-                    cell.paragraphs[0].clear()
-                    if averages[category] is not None:
-                        cell.paragraphs[0].add_run(f"{averages[category]:.2f}")
-                    else:
-                        cell.paragraphs[0].add_run(" - ")
+    def fill_row(self, doc: Document, values, type, categories=constants.TABLE_CATEGORIES, color=RGBColor(0, 0, 0)):
+        for category in categories:
+            cell = self.find_table_cell_by_tag(doc, type + category)
+            if cell is not None:
+                # fill the cell with the data
+                cell.paragraphs[0].clear()
+                if category in values and values[category] is not None:
+                    cell.paragraphs[0].add_run(f"{values[category]:.2f}".rstrip("0").rstrip("."))
+                else:
+                    cell.paragraphs[0].add_run(" - ")
+                cell.paragraphs[0].runs[0].font.color.rgb = color
+            else:
+                print(f"Cell with tag {type + category} not found in the document.")
     
-    def fill_table(self, doc: Document, averages, stds, person_name):
+    def fill_main_table(self, doc: Document, averages, stds, person_name):
         # find the table in the document and fill it with data
-        old_data = averages[person_name]["old"]
-        new_data = averages[person_name]["new"]
-        stds_data = stds[person_name]["new"]
-        total_data = averages["total"]["new"]
+        old_data = {} if len(averages[person_name]) == 1 else averages[person_name][-2]
+        new_data = averages[person_name][-1]
+        stds_data = stds[person_name][-1]
+        total_data = averages["total"][-1]
         
         # fill the table with the data
         self.fill_row(doc, old_data, "old ")
@@ -274,15 +279,24 @@ class Docx_helper(ABC):
         self.fill_row(doc, stds_data, "std ")
         self.fill_row(doc, total_data, "total ")
     
+    def fill_values_table(self, doc: Document, counts, person_name: str):
+        # find the table in the document and fill it with data
+        self.fill_row(doc, counts[person_name][-1][1], "negative ",
+                      categories=constants.PERSONAL_CATEGORIES, color=RGBColor(255, 0, 0))
+        self.fill_row(doc, counts[person_name][-1][2], "neutral ",
+                      categories=constants.PERSONAL_CATEGORIES)
+        self.fill_row(doc, counts[person_name][-1][3], "positive ",
+                      categories=constants.PERSONAL_CATEGORIES, color=RGBColor(0, 255, 0))
+    
     def create_main_graph(self, averages, stds, person_name, path_to_save):
         fig = plt.figure()
 
         # Plot settings
         y_pos = np.arange(len(constants.MAIN_CATEGORIES))
         fig, ax = plt.subplots()
-        avg_values = [averages[person_name]["new"].get(category, 0) for category in constants.MAIN_CATEGORIES]
-        total_avg_values = [averages["total"]["new"].get(category, 0) for category in constants.MAIN_CATEGORIES]
-        std_values = [stds[person_name]["new"].get(category, 0) for category in constants.MAIN_CATEGORIES]
+        avg_values = [averages[person_name][-1].get(category, 0) for category in constants.MAIN_CATEGORIES]
+        total_avg_values = [averages["total"][-1].get(category, 0) for category in constants.MAIN_CATEGORIES]
+        std_values = [stds[person_name][-1].get(category, 0) for category in constants.MAIN_CATEGORIES]
         ax.barh(y_pos, total_avg_values, align='center', color='skyblue', edgecolor='black', label='ממוצע מחזורי'[::-1])
         ax.errorbar(avg_values, y_pos, xerr=std_values, fmt='o', color='blue', label='עוצמה + פיזור'[::-1])
 
@@ -307,7 +321,7 @@ class Docx_helper(ABC):
         paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
 
         
-    def create_word_file_new(self, averages, stds, person_name, n=None, names_to_hashes=False):
+    def create_word_file_new(self, averages, stds, counts, person_name, n=None, names_to_hashes=False):
         if names_to_hashes:
             with open("names_to_hashes.txt", "a", encoding="utf-8") as f:
                 f.write(f"{person_name} => {self.my_hash(person_name)}\n")
@@ -323,7 +337,8 @@ class Docx_helper(ABC):
         title_str = "N=" + str(n) + " ," + "שיקוף סוציומטרי - " + person_name + ", סמסטר " + str(constants.SEMESTER)
         self.set_title(doc, title_str)
         
-        self.fill_table(doc, averages, stds, person_name)
+        self.fill_main_table(doc, averages, stds, person_name)
+        self.fill_values_table(doc, counts, person_name)
 
         # add the main graph to the table
         TMP_FILE_PATH = "tmp.png"
@@ -554,69 +569,59 @@ class Docx_helper(ABC):
         with open("names_to_hashes.txt", "w", encoding="utf-8") as f:
             f.write("")
 
-    def calculate_averages(self, numerical_columns, old_stats_df, stats_df, combined_df):
+    def calculate_averages(self, combined_dfs):
 
         averages = {}
+        counts = {}
         stds = {}
 
-        # Calculate stds for each person in the combined_df
-        for person_name, group in combined_df.groupby("name"):
-            stds[person_name] = {"old": {}, "new": {}}
+        # Calculate stds and averages for each person in the combined_df
+        for idx, combined_df in enumerate(combined_dfs):
+            for person_name, group in combined_df.groupby("name"):
+                if person_name not in averages:
+                    averages[person_name] = []
+                    counts[person_name] = []
+                    stds[person_name] = []
+                stds[person_name].append({})
+                averages[person_name].append({})
+                counts[person_name].append({})
+                stds[person_name][idx] = {}
+                averages[person_name][idx] = {}
+                counts[person_name][idx] = {1: {}, 2: {}, 3: {}}
 
+                numerical_columns = self.get_numerical_columns(combined_df)
+                
+                for category in numerical_columns:
+                    
+                    # Calculate new stds
+                    std = group[category].std()
+                    stds[person_name][idx][category] = std
+                    
+                    # Calculate new averages
+                    avg = group[category].mean()
+                    averages[person_name][idx][category] = avg
+                    
+                    # calculate count
+                    for i in range(1, 4):
+                        counts[person_name][idx][i][category] = group[group[category] == i].shape[0]
+
+            # Add a "total" person with the average of everyone
+            if "total" not in averages:
+                averages["total"] = []
+                counts["total"] = []
+                stds["total"] = []
+                
+            averages["total"].append({})
+            averages["total"][idx] = {}
             for category in numerical_columns:
-                # Calculate new stds
-                std_new = group[category].std()
-                stds[person_name]["new"][category] = std_new
-
-                # Calculate old stds if old_stats_df is provided
-                if old_stats_df is not None:
-                    old_std = old_stats_df[(old_stats_df["name"] == person_name) &
-                        (old_stats_df["category"] == category)]["std"]
-                    if not old_std.empty:
-                        stds[person_name]["old"][category] = old_std.values[0]
-                    else:
-                        stds[person_name]["old"][category] = None
-                else:
-                    stds[person_name]["old"][category] = None
-
-        # Calculate averages and stds for each person in the combined_df
-
-        for person_name, group in combined_df.groupby("name"):
-            averages[person_name] = {"old": {}, "new": {}}
-
-            for category in numerical_columns:
-                # Calculate new averages
-                avg_new = group[category].mean()
-                averages[person_name]["new"][category] = avg_new
-
-                # Calculate old averages if old_stats_df is provided
-                if old_stats_df is not None:
-                    old_avg = old_stats_df[(old_stats_df["name"] == person_name) &
-                        (old_stats_df["category"] == category)]["mean"]
-                    if not old_avg.empty:
-                        averages[person_name]["old"][category] = old_avg.values[0]
-                    else:
-                        averages[person_name]["old"][category] = None
-                else:
-                    averages[person_name]["old"][category] = None
-
-        # Add a "total" person with the average of everyone
-        averages["total"] = {"old": {}, "new": {}}
-        for category in numerical_columns:
-            avg_total = combined_df[category].mean()
-            averages["total"]["new"][category] = avg_total
-
-            if old_stats_df is not None:
-                old_avg_total = old_stats_df[old_stats_df["category"] == category]["mean"].mean()
-                averages["total"]["old"][category] = old_avg_total
-            else:
-                averages["total"]["old"][category] = None
-
-        return averages, stds
+                avg_total = combined_df[category].mean()
+                averages["total"][idx][category] = avg_total
+                
+        return averages, stds, counts
 
 
     def run_word_creation_new(self,
-                          combined_df: pd.DataFrame,
+                          combined_dfs: pd.DataFrame,
                           stats_df: pd.DataFrame,
                           name_to_classification: dict = None,
                           old_stats_df=None,
@@ -625,10 +630,10 @@ class Docx_helper(ABC):
                           names_to_hashes: bool=False,
                           is_socio: bool = True):
         
-        averages, stds = self.calculate_averages(self.get_numerical_columns(combined_df), old_stats_df, stats_df, combined_df)
+        averages, stds, counts = self.calculate_averages(combined_dfs)
         # create word file for every person
-        for df in tqdm(combined_df.groupby("name"), disable=not verbose):
+        for df in tqdm(combined_dfs[-1].groupby("name"), disable=not verbose):
             person_name = df[0]
             
-            self.create_word_file_new(averages, stds, person_name, n=df[1].shape[0], names_to_hashes=names_to_hashes)
+            self.create_word_file_new(averages, stds, counts, person_name, n=df[1].shape[0], names_to_hashes=names_to_hashes)
         

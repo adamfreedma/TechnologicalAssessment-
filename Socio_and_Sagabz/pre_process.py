@@ -61,7 +61,7 @@ class PreProcess(ABC):
 
         data_per_person = self.gen_data_per_person(combined_dataframe)
         
-        return combined_dataframe, data_per_person
+        return [combined_dataframe], data_per_person
 
 
     def remove_unwanted_data(self, df: pd.DataFrame):

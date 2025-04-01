@@ -34,7 +34,7 @@ The project requires the following Python libraries:
 - `openpyxl`
 
 ## Running the Project
-1. **Prepare Data**: Ensure that you have all required input files - i.e the sociogram of current semester and the last on on your computer. 
+1. **Prepare Data**: Ensure that you have all required input files - i.e the sociogram of current semester and the last on on your computer.
 2. **Data Validation** Ensure manually that the input data is in the correct format (for example that no one filled a name instead of a number as one of their choices)
 2. **Update Constants** Update the following constant :
    * `FILE_PATHS`- Place the paths of the input files in the  constant in cronological order
@@ -55,6 +55,6 @@ The project requires the following Python libraries:
 
 ## Contributors
 - Developed as part of the Talpiot evaluation system for cadet assessment.
-- First developed by Iftah Farkash from מ"ד 
+- First developed by Iftah Farkash from מ"ד
 - Further developement was made by Ben Hillel from מ"ד and Ohad Levin from ל"ט
 

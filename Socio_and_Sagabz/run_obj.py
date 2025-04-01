@@ -39,7 +39,7 @@ class SocioAndSagabz():
         self.analyze_start_task()
         
         self.raw_data_dir_path = os.path.join(self.outputs_path, "raw_data")
-        self.combined_df = None
+        self.combined_df = []
         self.data_per_person_list = None
         self.name_to_classification = None
         self.stats_df = None
@@ -99,11 +99,14 @@ class SocioAndSagabz():
 
         if self.combine_excels:
             self.combined_df, self.data_per_person_list = preprocess_obj.run(self.inputs_path)
-            self.export_to_excel(self.combined_df, combined_data_path)
+            self.export_to_excel(self.combined_df[-1], combined_data_path)
         
         else:
-            self.combined_df = self.load_from_excel(combined_data_path)
-            self.data_per_person_list = preprocess_obj.gen_data_per_person(self.combined_df)
+            for semester in range(1, 7):
+                combined_data_path = os.path.join(self.outputs_path, "combined_data_{i}.xlsx")
+                if os.path.exists(combined_data_path):
+                    self.combined_df += self.load_from_excel(combined_data_path)
+            self.data_per_person_list = preprocess_obj.gen_data_per_person(self.combined_df[-1])
         
     
     def create_individual_excel(self):
@@ -145,7 +148,7 @@ class SocioAndSagabz():
 
         if self.run_statistics:
             stat_obj = Statistics()
-            self.stats_df = stat_obj.run(self.combined_df)
+            self.stats_df = stat_obj.run(self.combined_df[-1])
 
             self.stats_df["n_sigma"] = self.stats_df.groupby("category")["mean"].transform(lambda x: (x - np.mean(x)) / np.std(x))
 
