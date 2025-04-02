@@ -12,5 +12,5 @@ CATEGORY_NAME_DICT = {'knowing': 'רמת היכרות', 'intrapersonal': 'בין
 OUTPUT_PATH = "output/"
 
 MAIN_CATEGORIES = ["intrapersonal", "functioning in society", "leadership", "conduct", "academy"]
-TABLE_CATEGORIES = ["applicative knowledge", "functioning in society", "leadership", "conduct", "academy"]
+TABLE_CATEGORIES = ['knowing', 'intrapersonal', 'functioning in society', 'leadership', 'conduct', 'academy', 'security']
 SEMESTER = "ב"

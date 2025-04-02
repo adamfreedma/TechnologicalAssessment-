@@ -33,7 +33,7 @@ class SocioAndSagabz():
         self.start_task = start_task
         self.start_cadet = start_cadet
         
-        self.combine_excels = True
+        self.combine_excels = False
         self.split_excels = True
         self.run_statistics = True
         self.analyze_start_task()
@@ -103,9 +103,10 @@ class SocioAndSagabz():
         
         else:
             for semester in range(1, 7):
-                combined_data_path = os.path.join(self.outputs_path, "combined_data_{i}.xlsx")
+                combined_data_path = os.path.join(self.inputs_path, f"combined_data_{semester}.xlsx")
+                print(combined_data_path)
                 if os.path.exists(combined_data_path):
-                    self.combined_df += self.load_from_excel(combined_data_path)
+                    self.combined_df.append(self.load_from_excel(combined_data_path))
             self.data_per_person_list = preprocess_obj.gen_data_per_person(self.combined_df[-1])
         
     

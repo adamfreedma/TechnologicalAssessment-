@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from ast import List
 from cProfile import label
 from io import BytesIO
 from pydoc import Doc
@@ -287,6 +288,11 @@ class Docx_helper(ABC):
                       categories=constants.PERSONAL_CATEGORIES)
         self.fill_row(doc, counts[person_name][-1][3], "positive ",
                       categories=constants.PERSONAL_CATEGORIES, color=RGBColor(0, 255, 0))
+        
+    def fill_semester_table(self, doc: Document, averages, person_name: str):
+        
+        for i in range(1, len(averages[person_name]) + 1):
+            self.fill_row(doc, averages[person_name][-i], f"{i} ", categories=constants.TABLE_CATEGORIES)
     
     def create_main_graph(self, averages, stds, person_name, path_to_save):
         fig = plt.figure()
@@ -339,6 +345,7 @@ class Docx_helper(ABC):
         
         self.fill_main_table(doc, averages, stds, person_name)
         self.fill_values_table(doc, counts, person_name)
+        self.fill_semester_table(doc, averages, person_name)
 
         # add the main graph to the table
         TMP_FILE_PATH = "tmp.png"
