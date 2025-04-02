@@ -5,6 +5,7 @@ from io import BytesIO
 from pydoc import Doc
 from sre_parse import CATEGORIES
 
+from matplotlib import category
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -260,7 +261,10 @@ class Docx_helper(ABC):
                 # fill the cell with the data
                 cell.paragraphs[0].clear()
                 if category in values and values[category] is not None:
-                    cell.paragraphs[0].add_run(f"{values[category]:.2f}".rstrip("0").rstrip("."))
+                    if isinstance(values[category], tuple):
+                        cell.paragraphs[0].add_run(f"{values[category][0]:.1f}-{values[category][1]:.1f}")
+                    else:
+                        cell.paragraphs[0].add_run(f"{values[category]:.2f}".rstrip("0").rstrip("."))
                 else:
                     cell.paragraphs[0].add_run(" - ")
                 cell.paragraphs[0].runs[0].font.color.rgb = color
@@ -273,12 +277,14 @@ class Docx_helper(ABC):
         new_data = averages[person_name][-1]
         stds_data = stds[person_name][-1]
         total_data = averages["total"][-1]
+        range_data = averages["range"][-1]
         
         # fill the table with the data
         self.fill_row(doc, old_data, "old ")
         self.fill_row(doc, new_data, "new ")
         self.fill_row(doc, stds_data, "std ")
         self.fill_row(doc, total_data, "total ")
+        self.fill_row(doc, range_data, "range ")
     
     def fill_values_table(self, doc: Document, counts, person_name: str):
         # find the table in the document and fill it with data
@@ -313,6 +319,65 @@ class Docx_helper(ABC):
         plt.gca().invert_yaxis()  # Invert y-axis to match typical bar chart order
 
         # save the figure
+        plt.savefig(path_to_save, bbox_inches='tight')
+        plt.close(fig)
+        
+    
+    def transform_to_graph_coordinates(self, x_values, ax):
+        """
+        Transform x values to graph coordinate values based on the given axis.
+
+        Args:
+            x_values (list or np.array): The x values to be transformed.
+            ax (matplotlib.axes.Axes): The axis object of the graph.
+
+        Returns:
+            list: Transformed x values in graph coordinate space.
+        """
+        x_min, x_max = ax.get_xlim()
+        graph_width = x_max - x_min
+        transformed_values = [(x - x_min) / graph_width for x in x_values]
+        return transformed_values
+    
+    def create_progress_graph(self, averages, person_name, path_to_save):
+        
+        COLORS = ["#ADD8E6", "#6495ED", "#00008B"]  # Light blue, Medium blue, Dark blue
+        # Set bar width and spacing
+        bar_width = 0.25
+        spacing = 0.35  # Extra spacing between groups
+
+        x = np.arange(2) * (1 + spacing)
+        # Create the plot
+        fig, ax = plt.subplots(figsize=(14, 7))
+        
+        semester_count = len(averages[person_name])
+        
+        for i in range(semester_count):
+            commandership = np.average([averages[person_name][i][category] for category in constants.COMMANDERSHIP_CATEGORIES])
+            professionalism = np.average([averages[person_name][i][category] for category in constants.PROFESSIONAL_GRAPH_CATEGORIES])
+            bars = ax.bar(x + i * bar_width, [commandership, professionalism], bar_width, label=f'Semester {i+1}', color=COLORS[i % len(COLORS)])
+            for bar in bars:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2, height, f'{height:.2f}', ha='center', va='bottom', fontsize=13, color='black')
+
+        for i in range(semester_count):
+            commandership = np.average([averages["total"][i][category] for category in constants.COMMANDERSHIP_CATEGORIES])
+            professionalism = np.average([averages["total"][i][category] for category in constants.PROFESSIONAL_GRAPH_CATEGORIES])
+
+            lims = [x[0] + bar_width * (i - 0.5), x[0] + bar_width * (i + 0.5),
+                    x[1] + bar_width * (i - 0.5), x[1] + bar_width * (i + 0.5)]
+            t_lims = self.transform_to_graph_coordinates(lims, ax)
+            
+            ax.axhline(y=commandership, xmin=t_lims[0], xmax=t_lims[1],
+                       color='gray', linestyle='dashed')
+            ax.axhline(y=professionalism, xmin=t_lims[2], xmax=t_lims[3],
+                       color='gray', linestyle='dashed')
+
+        
+        ax.set_xticks(x + bar_width * (semester_count - 1) / 2)
+        ax.set_xticklabels(["מנהיגות"[::-1], "מקצועיות"[::-1]], rotation=45, ha='right', fontsize=16)  # Align to right for Hebrew
+        ax.legend()
+        plt.tight_layout()
         plt.savefig(path_to_save, bbox_inches='tight')
         plt.close(fig)
 
@@ -356,6 +421,13 @@ class Docx_helper(ABC):
         cell.add_paragraph().add_run().add_picture(TMP_FILE_PATH, height=Inches(1.9))
         cell.paragraphs[1].alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
         # remove png as it is no longer needed
+        os.remove(TMP_FILE_PATH)
+        
+        self.create_progress_graph(averages, person_name, TMP_FILE_PATH)
+        cell = self.find_table_cell_by_tag(doc, "progress_graph")
+        cell.paragraphs[0].clear()
+        cell.add_paragraph().add_run().add_picture(TMP_FILE_PATH, height=Inches(1.9))
+        cell.paragraphs[1].alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
         os.remove(TMP_FILE_PATH)
 
         # Save the document
@@ -617,12 +689,22 @@ class Docx_helper(ABC):
                 averages["total"] = []
                 counts["total"] = []
                 stds["total"] = []
+                averages["range"] = []
+                counts["range"] = []
+                stds["range"] = []
                 
             averages["total"].append({})
             averages["total"][idx] = {}
+            averages["range"].append({})
+            averages["range"][idx] = {}
             for category in numerical_columns:
                 avg_total = combined_df[category].mean()
+                all_avgs = [averages[name][idx][category] for name in
+                            averages.keys() if name not in ["total", "range"]]
+                min_total = min(all_avgs)
+                max_total = max(all_avgs)
                 averages["total"][idx][category] = avg_total
+                averages["range"][idx][category] = (min_total, max_total)
                 
         return averages, stds, counts
 

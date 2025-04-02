@@ -11,6 +11,9 @@ CATEGORY_NAME_DICT = {'knowing': 'רמת היכרות', 'intrapersonal': 'בין
                         'mission': 'שליחות', 'courtesy': 'דרך ארץ', 'general': 'כללי'}
 OUTPUT_PATH = "output/"
 
+COMMANDERSHIP_CATEGORIES = ['intrapersonal', 'functioning in society', 'leadership']
+PROFESSIONAL_GRAPH_CATEGORIES = ['academy', 'conduct', 'security', 'applicative knowledge']
+
 MAIN_CATEGORIES = ["intrapersonal", "functioning in society", "leadership", "conduct", "academy"]
 TABLE_CATEGORIES = ['knowing', 'intrapersonal', 'functioning in society', 'leadership', 'conduct', 'academy', 'security']
 SEMESTER = "ב"
