@@ -1,11 +1,7 @@
 from abc import ABC, abstractmethod
-from ast import List
 from cProfile import label
 from io import BytesIO
-from pydoc import Doc
-from sre_parse import CATEGORIES
 
-from matplotlib import category
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -70,7 +66,6 @@ def add_in_the_beginning(sentence, add_on):
         sentence = add_on + sentence
     return sentence
 
-
 def ensure_ends_with(sentence, add_on):
     if isinstance(sentence, str):
         if sentence[-1] == " ":
@@ -79,7 +74,6 @@ def ensure_ends_with(sentence, add_on):
             sentence += add_on
     sentence = fix_rtl_symbols(sentence)
     return sentence
-
 
 class Docx_helper(ABC):
     def __init__(self, file_format_path, word_output_dir):
@@ -115,131 +109,6 @@ class Docx_helper(ABC):
         else:
             ret_val = "sigma value is average"
         return ret_val
-
-    def create_histogram(self, all_avgs, avg_total, avg_personal, std_personal, category,
-                         old_average=-1, N=-1):
-        fig = plt.figure()
-        ax = plt.gca()
-
-        is_values = self.is_values(category)
-
-        if is_values:
-            bins = np.arange(-0.125, 3.375, 0.25)
-            xticks = np.arange(0, 3.25, 0.25)
-        else:
-            bins = np.arange(-0.25, 6.75, 0.5)
-            xticks = np.arange(0, 6.5, 0.5)
-
-        plt.xticks(xticks, fontsize=16)
-        plt.hist(x=all_avgs, bins=bins, rwidth=0.9)
-        plt.yticks(fontsize=16)
-
-        # plot the average value of the specific person
-        plt.axvline(avg_personal, color='red')
-
-        # plot the average value of person form last year
-        if old_average != -1:
-            plt.axvline(old_average, color='green', linestyle="--")
-            plt.text(0.01, 0.7, s="Red line - new result\nDashed line - last semester", fontsize=12, color='black',
-                     transform=ax.transAxes)
-
-        # text of number of comments for this category (N)
-        if N != -1:
-            plt.text(0.01, 0.6, s=f"N (none zero) ={N}", fontsize=16, color='blue', transform=ax.transAxes)
-
-        # plot the std of the specific person
-        # the name column is the index, so we need the i'th column
-        plt.hlines(y=sum(ax.get_ylim()) / 2, xmin=avg_personal - std_personal,
-                   xmax=avg_personal + std_personal, color='red')
-        # plt.text(0.01, 0.93, transform=ax.transAxes,
-        #          s=r'$\sigma$' + f'={std_personal}\n{self.sigma_text(std_personal, is_values)}',
-        #          fontsize=16, color='red')
-        plt.text(0.01, 0.93, transform=ax.transAxes, s=r'$\sigma$' + f"={std_personal}", fontsize=16, color='red')
-        plt.text(0.01, 0.89, s=self.sigma_text(std_personal, category), fontsize=16, color='red',
-                 transform=ax.transAxes)
-
-        plt.axvline(avg_total, color='black')
-        secondary_ax = ax.secondary_xaxis("top")
-        # plotting the value of the axvline on the histogram
-        if abs(avg_personal - avg_total) < 0.2:
-            diff = (0.2 - abs(avg_personal - avg_total)) / 2
-            if avg_total > avg_personal:
-                secondary_ax.set_xticks(ticks=[avg_personal - diff, avg_total + diff],
-                                        labels=[f"{round(avg_personal, 2)}",
-                                                f"{round(avg_total, 2)}"], rotation=60)
-            else:
-                secondary_ax.set_xticks(ticks=[avg_total - diff, avg_personal + diff],
-                                        labels=[f"{round(avg_total, 2)}",
-                                                f"{round(avg_personal, 2)}"], rotation=60)
-        else:
-            secondary_ax.set_xticks(ticks=[avg_personal, avg_total],
-                                    labels=[f"{round(avg_personal, 2)}", f"{round(avg_total, 2)}"],
-                                    rotation=60)
-
-        for label in secondary_ax.get_xticklabels():
-            label.set_fontsize(16)
-
-        fig.set_size_inches(10, 5)
-        plt.close(fig)
-        # fig.show()
-        # plt.show()
-        return fig
-
-    def insert_classifications(self, classification_df, format_file_name):
-        conserve_names = [("Interpersonal Skills", "יכולות בין-אישיות"), \
-                          ("Intrapersonal Skills", "יכולות תוך-אישיות"), \
-                          ("Professionalism", "מקצועיות"), \
-                          ("Conduct", "התנהלות"), \
-                          ("Leadership", "מנהיגות"), \
-                          ("Other", "אחר")]
-
-        improve_names = [("Interpersonal Skills2", "יכולות בין-אישיות"), \
-                         ("Intrapersonal Skills2", "יכולות תוך-אישיות"), \
-                         ("Professionalism2", "מקצועיות"), \
-                         ("Conduct2", "התנהלות"), \
-                         ("Leadership2", "מנהיגות"), \
-                         ("Other2", "אחר")]
-
-        rtl_marks = "\u200F"
-        doc = DocxTemplate(template_file=format_file_name)
-        context = {'conserve_classifications': [], 'improve_classifications': []}
-
-        for column, word_name in conserve_names:
-            list_of_sentences = []
-            if column not in classification_df:
-                continue
-
-            for i in range(len(classification_df[column])):
-                if classification_df[column][i] in ["True", True, "TRUE", "true"]:
-                    current_sentence = classification_df['Original_conserve'][i]
-                    current_sentence = ensure_ends_with(current_sentence, ADD_IN_END_OF_SENTENCE)
-                    list_of_sentences.append({'name': current_sentence})
-
-            if len(list_of_sentences) > 0:
-                class_dict = {'name': f"\u202B {word_name} {rtl_marks}){rtl_marks}{len(list_of_sentences)}{rtl_marks}({rtl_marks} " + ":\u202C"}
-                class_dict["bullets"] = list_of_sentences
-
-                context["conserve_classifications"].append(class_dict)
-
-        for column, word_name in improve_names:
-            list_of_sentences = []
-            if column not in classification_df:
-                continue
-
-            for i in range(len(classification_df[column])):
-                if classification_df[column][i] in ["True", True, "TRUE", "true"]:
-                    current_sentence = classification_df['Original_improve'][i]
-                    current_sentence = ensure_ends_with(current_sentence, ADD_IN_END_OF_SENTENCE)
-                    list_of_sentences.append({'name': current_sentence})
-
-            if len(list_of_sentences) > 0:
-                class_dict = {'name': f"\u202B {word_name} {rtl_marks}){rtl_marks}{len(list_of_sentences)}{rtl_marks}({rtl_marks} " + ":\u202C"}
-                class_dict["bullets"] = list_of_sentences
-
-                context["improve_classifications"].append(class_dict)
-
-        doc.render(context=context)
-        doc.save(format_file_name)
     
     def find_table_cell_by_tag(self, doc: Document, tag: str) -> object:
         for table in doc.tables:
@@ -568,7 +437,7 @@ class Docx_helper(ABC):
                 numerical_columns = self.get_numerical_columns(combined_df)
                 
                 for category in numerical_columns:
-                    
+                    group = group[1 <= group[category] <= 6]
                     # Calculate new stds
                     std = group[category].std()
                     stds[person_name][idx][category] = std
@@ -595,12 +464,11 @@ class Docx_helper(ABC):
             averages["range"].append({})
             averages["range"][idx] = {}
             for category in numerical_columns:
-                avg_total = combined_df[category].mean()
                 all_avgs = [averages[name][idx][category] for name in
                             averages.keys() if name not in ["total", "range"]]
                 min_total = min(all_avgs)
                 max_total = max(all_avgs)
-                averages["total"][idx][category] = avg_total
+                averages["total"][idx][category] = np.average(all_avgs)
                 averages["range"][idx][category] = (min_total, max_total)
                 
         return averages, stds, counts
