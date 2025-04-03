@@ -173,7 +173,7 @@ class SocioAndSagabz():
         print("making word files")
         # create word files
         docx_obj = self.get_docx_obj()(self.format_path, word_output_dir)
-        docx_obj.run_word_creation_new(self.combined_df,
+        docx_obj.run_word_creation(self.combined_df,
                      self.stats_df,
                      name_to_classification=self.name_to_classification,
                      old_stats_df=old_stats_df,

@@ -497,7 +497,7 @@ class Docx_helper(ABC):
             para = add_bullet_point(conserve_cell, literal)
             self.set_rtl_paragraph(para)
     
-    def create_word_file_new(self, averages, stds, counts, literals, person_name, n=None, names_to_hashes=False):
+    def create_word_file(self, averages, stds, counts, literals, person_name, n=None, names_to_hashes=False):
         if names_to_hashes:
             with open("names_to_hashes.txt", "a", encoding="utf-8") as f:
                 f.write(f"{person_name} => {self.my_hash(person_name)}\n")
@@ -539,220 +539,11 @@ class Docx_helper(ABC):
         # Save the document
         doc.save(path_to_save)
 
-    def create_word_file(self, hists, classification_df, person_name, n=None, names_to_hashes=False):
-        if names_to_hashes:
-            with open("names_to_hashes.txt", "a", encoding="utf-8") as f:
-                f.write(f"{person_name} => {self.my_hash(person_name)}\n")
-            title_to_save = f"{self.my_hash(person_name)} (N={n})".replace('"', '').replace("'", '') + ".docx"
-        else:
-            title_to_save = f"{person_name} (N={n})".replace('"', '').replace("'", '') + ".docx"
-        path_to_save = os.path.join(self.word_output_dir, title_to_save)
-
-        doc = Document(self.file_format_path)
-
-        title = doc.paragraphs[0]
-        if names_to_hashes:
-            title.text += self.my_hash(person_name)
-        else:
-            title.text += person_name
-        if n is not None:
-            title.text += f" (N={n})"
-        title.runs[0] = "David"
-        title.runs[0].underline = True
-
-        # add the histograms to the table
-        for i in range(len(hists)):
-            # save the hist as png, so we can load to word as a picture
-            cur_hist = hists[i]
-            TMP_FILE_PATH = "tmp.png"
-            cur_hist.savefig(TMP_FILE_PATH)
-
-            # load png
-            cell = doc.tables[0].cell(i, 1)
-            cell.add_paragraph().add_run().add_picture(TMP_FILE_PATH, height=Inches(1.9))
-            cell.paragraphs[1].alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-
-            # remove png as it is no longer needed
-            os.remove(TMP_FILE_PATH)
-
-        # for paragraph in doc.paragraphs:
-        #     self.set_paragraph_rtl(paragraph)
-
-        # avoiding corrupting the word file
-        # the id gets mixed with some of the things of the template file
-        # for further reading - https://github.com/python-openxml/python-docx/issues/455
-        # or need version better than 0.8.7
-        try:
-            docPrs = doc._part._element.findall('.//' + qn('wp:docPr'))
-            for docPr in docPrs:
-                docPr.set('id', str(int(docPr.get('id')) + 100000))
-        except:
-            pass
-
-
-        if not IS_SOCIO:
-            try:
-                print(f"adding literals not classifing")
-                # points to conserve and point to improve
-                conserve_cell = doc.tables[0].cell(len(hists) + len(classification_df[:-2]), 1)
-                conserve_title_cell = doc.tables[0].cell(len(hists) + len(classification_df[:-2]), 0)
-                improve_cell = doc.tables[0].cell(len(hists) + len(classification_df[:-2]) + 1, 1)
-                improve_title_cell = doc.tables[0].cell(len(hists) + len(classification_df[:-2]) + 1, 0)
-                conserve_cell.add_paragraph(fix_rtl_symbols("\n\n".join(classification_df[-2].dropna().array)))
-                improve_cell.add_paragraph(fix_rtl_symbols("\n\n".join(classification_df[-1].dropna().array)))
-                conserve_title_cell.add_paragraph(f"(N={len(classification_df[-2].dropna().array)})")
-                improve_title_cell.add_paragraph(f"(N={len(classification_df[-1].dropna().array)})")
-
-                cells = [conserve_cell, conserve_title_cell, improve_cell, improve_title_cell]
-                for cell in cells:
-                    for paragraph in cell.paragraphs:
-                        paragraph.style.font.name = "David"
-                        paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
-                for cell in (conserve_title_cell, improve_title_cell):
-                    for paragraph in cell.paragraphs:
-                        paragraph.style.font.name = "David"
-                        paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-            except:
-                print("Error in adding literals to the word file for")
-                print(classification_df)
-
-
-
-            doc.save(path_to_save)
-        elif classification_df is not None:
-            doc.save(path_to_save)
-            self.insert_classifications(classification_df, path_to_save)
-        else:
-            doc.save(path_to_save)
-
-    def set_paragraph_rtl(self, paragraph):
-        # Set paragraph alignment to right
-        paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.RIGHT
-
-        # Set paragraph direction to RTL
-        p = paragraph._element
-        pPr = p.get_or_add_pPr()
-        bidi = OxmlElement('w:bidi')
-        bidi.set(qn('w:val'), '1')
-        pPr.append(bidi)
-
-    def create_text_figure(self, avg_personal, std_personal):
-        val_to_sentence = \
-            {1: "נמוך ביחס לממוצע",
-             2: "מתחת לממוצע",
-             3: "מעט מתחת לממוצע",
-             4: "מעט מעל הממוצע",
-             5: "מעל הממוצע",
-             6: "גבוה ביחס לממוצע"}
-        fig = plt.figure()
-        rgba2 = text_to_rgba(r""+f"{val_to_sentence[round(avg_personal)][::-1]}", color="black", fontsize=15, dpi=200)
-        fig.figimage(rgba2, 200, 300)
-        return fig
 
     def get_numerical_columns(self, df: pd.DataFrame) -> list:
         # Get the numerical columns from the dataframe
         numerical_columns = df.select_dtypes(include=[np.number]).columns.tolist()
         return numerical_columns
-
-    def run_word_creation(self,
-                          combined_df: pd.DataFrame,
-                          stats_df: pd.DataFrame,
-                          name_to_classification: dict = None,
-                          old_stats_df=None,
-                          verbose: bool = True,
-                          start_cadet: str = None,
-                          names_to_hashes: bool=False,
-                          is_socio: bool = True):
-
-
-        reached_start_cadet = start_cadet is None
-        # create word file for every person
-        for df in tqdm(combined_df.groupby("name"), disable=not verbose):
-            person_name = df[0]
-            if not reached_start_cadet:
-                if person_name == start_cadet:
-                    reached_start_cadet = True
-                else:
-                    continue
-
-            df = df[1]
-
-            # TODO - voodoo code to get only numerical columns
-            if name_to_classification[person_name] is None:
-                num_columns_index = -3
-            elif (name_to_classification[person_name].shape[0]==0):
-                num_columns_index = -2
-            else:
-                num_columns_index = -3
-            numerical_columns = df.columns.drop("name")[:num_columns_index]  # drop the conserve, improve and good talpion columns
-            stats_per_person = stats_df[stats_df["name"] == person_name]
-            no_hist_numerical_columns = df.columns.drop("name")[num_columns_index:-2]
-
-            hists = []
-            for category in numerical_columns:
-                # calculate old value
-                old_average = -1
-                if old_stats_df is not None:
-                    # does old_stats_df contain the person?
-                    if len(old_stats_df[old_stats_df["name"] == person_name]) == 0:
-                        print(f"Person {person_name} not found in old stats!\n"
-                              f"probably someone changed their name in the raw data excel file\n")
-
-                    old_res = \
-                        old_stats_df[(old_stats_df["name"] == person_name) & (old_stats_df["category"] == category)][
-                            "mean"]
-                    if len(old_res) > 0:
-                        old_average = old_res.array[0]
-
-                combined_col = combined_df[category]
-                # remove from col every non numeric value row
-                combined_col = combined_col[
-                    combined_col.apply(lambda x: isinstance(x, (int, np.int64, float, np.float64)))]
-                combined_col = combined_col[combined_col.apply(lambda x: x > 0)]  # filter 0 values
-
-                # calculate the number of non 0 comments for this name, for this category
-                N = combined_col[combined_df["name"] == person_name].shape[0]
-
-                avg_total = stats_df[stats_df["category"] == category]["mean"].mean() # mean of all the people
-                # avg_total = combined_col.mean()
-
-                avg_personal = stats_per_person[stats_per_person["category"] == category]["mean"].values[0]
-                std_personal = stats_per_person[stats_per_person["category"] == category]["std"].values[0]
-                all_avgs = stats_df[stats_df["category"] == category]["mean"]
-
-                hist = self.create_histogram(all_avgs, avg_total, avg_personal, std_personal, category,
-                                             old_average=old_average, N=N)
-                hists.append(hist)
-
-            # Add the colums whom we want only the avrage and std to be presented without the histogram
-            for category in no_hist_numerical_columns:
-                avg_personal = stats_per_person[stats_per_person["category"] == category]["mean"].values[0]
-                std_personal = stats_per_person[stats_per_person["category"] == category]["std"].values[0]
-                hist = self.create_text_figure(avg_personal, std_personal)
-                hists.append(hist)
-
-
-            N = df.shape[0]
-            print(f"Creating word file for {person_name} (N={N})")
-            df2 = name_to_classification[person_name] if name_to_classification is not None else None
-            if df2 is not None:
-                if df2.shape[0] == 0 and person_name !="ממוצע":
-                    print(f"Person {person_name} has no classification")
-                    global IS_SOCIO
-                    IS_SOCIO = False
-                    other_literal_columns = df.columns.drop(numerical_columns).drop(no_hist_numerical_columns).drop("name")
-                    df2 = [df[lit_col] for lit_col in other_literal_columns]
-
-            self.create_word_file(hists, df2, person_name, n=N, names_to_hashes=names_to_hashes)
-
-        # save the hash text file to the output directory
-        with open(self.word_output_dir + "\\names_to_hashes.txt", "w", encoding="utf-8") as f:
-            with open("names_to_hashes.txt", "r", encoding="utf-8") as f2:
-                f.write(f2.read())
-
-        # open the temporary hash file and delete all of the content
-        with open("names_to_hashes.txt", "w", encoding="utf-8") as f:
-            f.write("")
 
     def calculate_averages(self, combined_dfs):
 
@@ -828,7 +619,7 @@ class Docx_helper(ABC):
                 
         return literals
             
-    def run_word_creation_new(self,
+    def run_word_creation(self,
                           combined_dfs: pd.DataFrame,
                           stats_df: pd.DataFrame,
                           name_to_classification: dict = None,
@@ -844,5 +635,5 @@ class Docx_helper(ABC):
         for df in tqdm(combined_dfs[-1].groupby("name"), disable=not verbose):
             person_name = df[0]
             
-            self.create_word_file_new(averages, stds, counts, literals, person_name, n=df[1].shape[0], names_to_hashes=names_to_hashes)
+            self.create_word_file(averages, stds, counts, literals, person_name, n=df[1].shape[0], names_to_hashes=names_to_hashes)
         
