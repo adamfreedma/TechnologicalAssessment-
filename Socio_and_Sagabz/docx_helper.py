@@ -21,7 +21,6 @@ from docxtpl import DocxTemplate
 from docx.oxml import OxmlElement
 from docx.shared import RGBColor
 
-
 import constants
 
 ADD_IN_END_OF_SENTENCE: str = "."
@@ -391,8 +390,114 @@ class Docx_helper(ABC):
         paragraph.runs[0] = "David"
         paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
 
+    def add_bullet_numbering(self, document):
+        # Access the numbering part of the document
+        numbering_part = document.part.numbering_part
+        numbering_elm = numbering_part.element
+
+        # Create a new abstract numbering definition for bullets
+        abstract_num = OxmlElement("w:abstractNum")
+        abstract_num.set(qn("w:abstractNumId"), "2")
+
+        lvl = OxmlElement("w:lvl")
+        lvl.set(qn("w:ilvl"), "0")
+
+        # Define the numbering format (bullet style)
+        numFmt = OxmlElement("w:numFmt")
+        numFmt.set(qn("w:val"), "bullet")
+        lvl.append(numFmt)
+
+        # Define the bullet symbol (•)
+        lvlText = OxmlElement("w:lvlText")
+        lvlText.set(qn("w:val"), "•")
+        lvl.append(lvlText)
+
+        lvlJc = OxmlElement("w:lvlJc")
+        lvlJc.set(qn("w:val"), "left")
+        lvl.append(lvlJc)
+
+        # Indentation for bullet list
+        pPr = OxmlElement("w:pPr")
+        ind = OxmlElement("w:ind")
+        ind.set(qn("w:left"), "360")  # Set a small indentation, adjust this value as needed
+        pPr.append(ind)
+        lvl.append(pPr)
+
+        abstract_num.append(lvl)
+        numbering_elm.append(abstract_num)
+
+        # Create the numbering instance for numId 2
+        num = OxmlElement("w:num")
+        num.set(qn("w:numId"), "2")
+        abstractNumId = OxmlElement("w:abstractNumId")
+        abstractNumId.set(qn("w:val"), "2")
+        num.append(abstractNumId)
+        numbering_elm.append(num)
+
+    def set_rtl_paragraph(self, para):
+        """ Ensures the paragraph and its text are in RTL to fix punctuation issues. """
+        pPr = para._element.get_or_add_pPr()
         
-    def create_word_file_new(self, averages, stds, counts, person_name, n=None, names_to_hashes=False):
+        # Set paragraph direction to RTL
+        rtl_dir = OxmlElement("w:bidi")  # 'bidi' ensures bidirectional text handling
+        rtl_dir.set(qn("w:val"), "1")
+        pPr.append(rtl_dir)
+
+        # Ensure all runs are also RTL
+        for run in para.runs:
+            rPr = run._element.get_or_add_rPr()
+            rtl_run = OxmlElement("w:rtl")
+            rtl_run.set(qn("w:val"), "1")
+            rPr.append(rtl_run)
+        
+        # Set alignment to right
+        alignment = OxmlElement("w:jc")
+        alignment.set(qn("w:val"), "left")
+        pPr.append(alignment)
+
+    def add_literals(self, doc: Document, literals, person_name):
+        improve_cell = self.find_table_cell_by_tag(doc, "points to improve")
+        conserve_cell = self.find_table_cell_by_tag(doc, "points to conserve")
+        
+        # Clear existing content
+        improve_cell.text = ""
+        conserve_cell.text = ""
+        
+        self.add_bullet_numbering(doc)
+
+        def add_bullet_point(cell, text):
+            para = cell.add_paragraph(text)
+            
+            # Get paragraph properties
+            p_pr = para._element.get_or_add_pPr()
+            num_pr = OxmlElement("w:numPr")
+            
+            # Set list level (0 for top-level bullets)
+            ilvl = OxmlElement("w:ilvl")
+            ilvl.set(qn("w:val"), "0")
+            
+            # Set numId (1 links it to an automatic bullet list)
+            num_id = OxmlElement("w:numId")
+            num_id.set(qn("w:val"), "2")
+                        
+            # Append to paragraph properties
+            num_pr.append(ilvl)
+            num_pr.append(num_id)
+            p_pr.append(num_pr)
+            
+            return para
+
+        # Add bullet points for "points to improve"
+        for literal in literals[person_name]["points to improve"]:
+            para = add_bullet_point(improve_cell, literal)
+            self.set_rtl_paragraph(para)
+
+        # Add bullet points for "points to conserve"
+        for literal in literals[person_name]["points to conserve"]:
+            para = add_bullet_point(conserve_cell, literal)
+            self.set_rtl_paragraph(para)
+    
+    def create_word_file_new(self, averages, stds, counts, literals, person_name, n=None, names_to_hashes=False):
         if names_to_hashes:
             with open("names_to_hashes.txt", "a", encoding="utf-8") as f:
                 f.write(f"{person_name} => {self.my_hash(person_name)}\n")
@@ -430,6 +535,7 @@ class Docx_helper(ABC):
         cell.paragraphs[1].alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
         os.remove(TMP_FILE_PATH)
 
+        self.add_literals(doc, literals, person_name)
         # Save the document
         doc.save(path_to_save)
 
@@ -708,7 +814,20 @@ class Docx_helper(ABC):
                 
         return averages, stds, counts
 
+    def get_literals(self, combined_df: pd.DataFrame) -> list:
 
+        literal_columns = combined_df.columns.drop(self.get_numerical_columns(combined_df)).drop("name")
+        literals = {}
+        
+        for person_name, group in combined_df.groupby("name"):
+            if person_name not in literals:
+                literals[person_name] = {"points to conserve": [], "points to improve": []}
+            
+            for category in literal_columns:
+                literals[person_name][category].extend(group[category].dropna().array)
+                
+        return literals
+            
     def run_word_creation_new(self,
                           combined_dfs: pd.DataFrame,
                           stats_df: pd.DataFrame,
@@ -720,9 +839,10 @@ class Docx_helper(ABC):
                           is_socio: bool = True):
         
         averages, stds, counts = self.calculate_averages(combined_dfs)
+        literals = self.get_literals(combined_dfs[-1])
         # create word file for every person
         for df in tqdm(combined_dfs[-1].groupby("name"), disable=not verbose):
             person_name = df[0]
             
-            self.create_word_file_new(averages, stds, counts, person_name, n=df[1].shape[0], names_to_hashes=names_to_hashes)
+            self.create_word_file_new(averages, stds, counts, literals, person_name, n=df[1].shape[0], names_to_hashes=names_to_hashes)
         
