@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from docx import Document
-from docx.shared import Inches
+from docx.shared import Inches, Pt
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from matplotlib.figure import Figure
 from tqdm import tqdm
@@ -21,6 +21,11 @@ import constants
 
 ADD_IN_END_OF_SENTENCE: str = "."
 IS_SOCIO = True
+
+def add_labels(ax, bars):
+    for bar in bars:
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2, height, f'{height:.2f}', ha='center', va='bottom', fontsize=constants.FONTSIZE, color='black')
 
 def text_to_rgba(s, *, dpi, **kwargs):
     # To convert a text string to an image, we can:
@@ -168,29 +173,31 @@ class Docx_helper(ABC):
         for i in range(1, len(averages[person_name]) + 1):
             self.fill_row(doc, averages[person_name][-i], f"{i} ", categories=constants.TABLE_CATEGORIES)
     
-    def create_main_graph(self, averages, stds, person_name, path_to_save):
-        fig = plt.figure()
+    def create_main_graph(self, doc, averages, stds, person_name, path_to_save, tag, categories=constants.MAIN_CATEGORIES, scale=6):
+        fig, ax = plt.subplots(figsize=(14, 7))
 
         # Plot settings
-        y_pos = np.arange(len(constants.MAIN_CATEGORIES))
-        fig, ax = plt.subplots()
-        avg_values = [averages[person_name][-1].get(category, 0) for category in constants.MAIN_CATEGORIES]
-        total_avg_values = [averages["total"][-1].get(category, 0) for category in constants.MAIN_CATEGORIES]
-        std_values = [stds[person_name][-1].get(category, 0) for category in constants.MAIN_CATEGORIES]
+        y_pos = np.arange(len(categories))
+        avg_values = [averages[person_name][-1].get(category, 0) for category in categories]
+        total_avg_values = [averages["total"][-1].get(category, 0) for category in categories]
+        std_values = [stds[person_name][-1].get(category, 0) for category in categories]
         ax.barh(y_pos, total_avg_values, align='center', color='skyblue', edgecolor='black', label='ממוצע מחזורי'[::-1])
-        ax.errorbar(avg_values, y_pos, xerr=std_values, fmt='o', color='blue', label='עוצמה + פיזור'[::-1])
+        ax.errorbar(avg_values, y_pos, xerr=std_values, fmt='o', color='blue', label='ממוצע + פיזור'[::-1])
 
         # Labels and formatting
         ax.set_yticks(y_pos)
-        ax.set_yticklabels(constants.CATEGORY_NAME_DICT[constants.MAIN_CATEGORIES[i]][::-1] for i in range(len(constants.MAIN_CATEGORIES)))
-        ax.legend()
+        ax.set_yticklabels([constants.CATEGORY_NAME_DICT[categories[i]][::-1] for i in range(len(categories))], fontsize=constants.FONTSIZE)
+        ax.tick_params(axis='x', labelsize=constants.FONTSIZE)
+        ax.legend(fontsize=constants.FONTSIZE)
         plt.gca().invert_yaxis()  # Invert y-axis to match typical bar chart order
 
         # save the figure
+        plt.xlim(0, scale + 0.5)
         plt.savefig(path_to_save, bbox_inches='tight')
         plt.close(fig)
         
-    
+        self.add_graph(doc, path_to_save, tag)
+        
     def transform_to_graph_coordinates(self, x_values, ax):
         """
         Transform x values to graph coordinate values based on the given axis.
@@ -206,8 +213,49 @@ class Docx_helper(ABC):
         graph_width = x_max - x_min
         transformed_values = [(x - x_min) / graph_width for x in x_values]
         return transformed_values
+        
+    def add_graph(self, doc, path_to_save, tag):
+        cell = self.find_table_cell_by_tag(doc, tag)
+        
+        if cell is None:
+            raise ValueError(f"Cell with tag {tag} not found in the document.")
+        
+        cell.paragraphs[0].clear()
+        cell.add_paragraph().add_run().add_picture(path_to_save, height=Inches(2.5))
+        cell.paragraphs[1].alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+        # remove png as it is no longer needed
+        os.remove(path_to_save)
     
-    def create_progress_graph(self, averages, person_name, path_to_save):
+    def create_knowing_graph(self, doc, high_knowing, low_knowing, person_name, path_to_save, tag):
+        bar_width = 0.25
+        spacing = 0.1  # Extra spacing between groups
+        x = np.arange(len(constants.KNOWING_CATEGORIES)) * (1 + spacing)
+
+        # Create the plot
+        fig, ax = plt.subplots(figsize=(14, 7))
+        high_knowing_list = [high_knowing[person_name][-1][category] for category in constants.KNOWING_CATEGORIES]
+        low_knowing_list = [low_knowing[person_name][-1][category] for category in constants.KNOWING_CATEGORIES]
+        bars1 = ax.bar(x - bar_width, high_knowing_list, bar_width, label='מידת היכרות גבוהה < 4'[::-1], color='#ADD8E6')  # Light blue
+        bars2 = ax.bar(x, low_knowing_list, bar_width, label='מידת היכרות נמוכה >= 4'[::-1], color='#6495ED')  # Medium blue
+
+        add_labels(ax, bars1)
+        add_labels(ax, bars2)
+        
+        ax.set_xticks(x)
+        labels = [constants.CATEGORY_NAME_DICT[category][::-1] for category in constants.KNOWING_CATEGORIES]
+        ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=constants.FONTSIZE)  # Align to right for Hebrew
+        ax.tick_params(axis='y', labelsize=constants.FONTSIZE)
+        ax.legend(fontsize=constants.FONTSIZE)
+
+        # Show the plot
+        plt.tight_layout()
+        plt.ylim(0, 6.5)
+        plt.savefig(path_to_save, bbox_inches='tight')
+        plt.close(fig)
+        
+        self.add_graph(doc, path_to_save, tag)
+    
+    def create_progress_graph(self, doc, averages, person_name, path_to_save, tag):
         
         COLORS = ["#ADD8E6", "#6495ED", "#00008B"]  # Light blue, Medium blue, Dark blue
         # Set bar width and spacing
@@ -223,31 +271,27 @@ class Docx_helper(ABC):
         for i in range(semester_count):
             commandership = np.average([averages[person_name][i][category] for category in constants.COMMANDERSHIP_CATEGORIES])
             professionalism = np.average([averages[person_name][i][category] for category in constants.PROFESSIONAL_GRAPH_CATEGORIES])
-            bars = ax.bar(x + i * bar_width, [commandership, professionalism], bar_width, label=f'Semester {i+1}', color=COLORS[i % len(COLORS)])
+            bars = ax.bar(x + i * bar_width, [commandership, professionalism], bar_width,
+                          label=f"סמסטר {chr(ord('א') + i)}"[::-1], color=COLORS[i % len(COLORS)])
             for bar in bars:
                 height = bar.get_height()
-                ax.text(bar.get_x() + bar.get_width()/2, height, f'{height:.2f}', ha='center', va='bottom', fontsize=13, color='black')
-
+                ax.text(bar.get_x() + bar.get_width()/2, height, f'{height:.2f}', ha='center', va='bottom', fontsize=constants.FONTSIZE, color='black')
+            
         for i in range(semester_count):
             commandership = np.average([averages["total"][i][category] for category in constants.COMMANDERSHIP_CATEGORIES])
             professionalism = np.average([averages["total"][i][category] for category in constants.PROFESSIONAL_GRAPH_CATEGORIES])
-
-            lims = [x[0] + bar_width * (i - 0.5), x[0] + bar_width * (i + 0.5),
-                    x[1] + bar_width * (i - 0.5), x[1] + bar_width * (i + 0.5)]
-            t_lims = self.transform_to_graph_coordinates(lims, ax)
-            
-            ax.axhline(y=commandership, xmin=t_lims[0], xmax=t_lims[1],
-                       color='gray', linestyle='dashed')
-            ax.axhline(y=professionalism, xmin=t_lims[2], xmax=t_lims[3],
-                       color='gray', linestyle='dashed')
-
+        
         
         ax.set_xticks(x + bar_width * (semester_count - 1) / 2)
-        ax.set_xticklabels(["מנהיגות"[::-1], "מקצועיות"[::-1]], rotation=45, ha='right', fontsize=16)  # Align to right for Hebrew
-        ax.legend()
+        ax.set_xticklabels(["מנהיגות"[::-1], "מקצועיות"[::-1]], rotation=45, ha='right', fontsize=constants.FONTSIZE)  # Align to right for Hebrew
+        ax.tick_params(axis='y', labelsize=constants.FONTSIZE)
+        ax.legend(fontsize=constants.FONTSIZE)
         plt.tight_layout()
+        plt.ylim(0, 6.5)
         plt.savefig(path_to_save, bbox_inches='tight')
         plt.close(fig)
+
+        self.add_graph(doc, path_to_save, tag)
 
     def set_title(self, doc: Document, title: str):
         # Set the title of the document
@@ -257,51 +301,9 @@ class Docx_helper(ABC):
         paragraph.runs[0].bold = True
         paragraph.runs[0].underline = True
         paragraph.runs[0] = "David"
+        paragraph.runs[0].font.name = "David"
+        paragraph.runs[0].font.size = Pt(14)
         paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-
-    def add_bullet_numbering(self, document):
-        # Access the numbering part of the document
-        numbering_part = document.part.numbering_part
-        numbering_elm = numbering_part.element
-
-        # Create a new abstract numbering definition for bullets
-        abstract_num = OxmlElement("w:abstractNum")
-        abstract_num.set(qn("w:abstractNumId"), "2")
-
-        lvl = OxmlElement("w:lvl")
-        lvl.set(qn("w:ilvl"), "0")
-
-        # Define the numbering format (bullet style)
-        numFmt = OxmlElement("w:numFmt")
-        numFmt.set(qn("w:val"), "bullet")
-        lvl.append(numFmt)
-
-        # Define the bullet symbol (•)
-        lvlText = OxmlElement("w:lvlText")
-        lvlText.set(qn("w:val"), "•")
-        lvl.append(lvlText)
-
-        lvlJc = OxmlElement("w:lvlJc")
-        lvlJc.set(qn("w:val"), "left")
-        lvl.append(lvlJc)
-
-        # Indentation for bullet list
-        pPr = OxmlElement("w:pPr")
-        ind = OxmlElement("w:ind")
-        ind.set(qn("w:left"), "360")  # Set a small indentation, adjust this value as needed
-        pPr.append(ind)
-        lvl.append(pPr)
-
-        abstract_num.append(lvl)
-        numbering_elm.append(abstract_num)
-
-        # Create the numbering instance for numId 2
-        num = OxmlElement("w:num")
-        num.set(qn("w:numId"), "2")
-        abstractNumId = OxmlElement("w:abstractNumId")
-        abstractNumId.set(qn("w:val"), "2")
-        num.append(abstractNumId)
-        numbering_elm.append(num)
 
     def set_rtl_paragraph(self, para):
         """ Ensures the paragraph and its text are in RTL to fix punctuation issues. """
@@ -332,8 +334,6 @@ class Docx_helper(ABC):
         improve_cell.text = ""
         conserve_cell.text = ""
         
-        self.add_bullet_numbering(doc)
-
         def add_bullet_point(cell, text):
             para = cell.add_paragraph(text)
             
@@ -360,13 +360,15 @@ class Docx_helper(ABC):
         for literal in literals[person_name]["points to improve"]:
             para = add_bullet_point(improve_cell, literal)
             self.set_rtl_paragraph(para)
+            para.style.font.name = "David"
 
         # Add bullet points for "points to conserve"
         for literal in literals[person_name]["points to conserve"]:
             para = add_bullet_point(conserve_cell, literal)
+            para.style.font.name = "David"
             self.set_rtl_paragraph(para)
     
-    def create_word_file(self, averages, stds, counts, literals, person_name, n=None, names_to_hashes=False):
+    def create_word_file(self, averages, stds, counts, high_knowing, low_knowing, literals, person_name, n=None, names_to_hashes=False):
         if names_to_hashes:
             with open("names_to_hashes.txt", "a", encoding="utf-8") as f:
                 f.write(f"{person_name} => {self.my_hash(person_name)}\n")
@@ -388,21 +390,12 @@ class Docx_helper(ABC):
 
         # add the main graph to the table
         TMP_FILE_PATH = "tmp.png"
-        self.create_main_graph(averages, stds, person_name, TMP_FILE_PATH)
-        # load png
-        cell = self.find_table_cell_by_tag(doc, "main_graph")
-        cell.paragraphs[0].clear()
-        cell.add_paragraph().add_run().add_picture(TMP_FILE_PATH, height=Inches(1.9))
-        cell.paragraphs[1].alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-        # remove png as it is no longer needed
-        os.remove(TMP_FILE_PATH)
+        self.create_main_graph(doc, averages, stds, person_name, TMP_FILE_PATH, "main_graph_professional", categories=constants.PROFESSIONAL_CATEGORIES)
+        self.create_main_graph(doc, averages, stds, person_name, TMP_FILE_PATH, "main_graph_personal", categories=constants.PERSONAL_CATEGORIES, scale=3)
+                
+        self.create_progress_graph(doc, averages, person_name, TMP_FILE_PATH, "progress_graph")
         
-        self.create_progress_graph(averages, person_name, TMP_FILE_PATH)
-        cell = self.find_table_cell_by_tag(doc, "progress_graph")
-        cell.paragraphs[0].clear()
-        cell.add_paragraph().add_run().add_picture(TMP_FILE_PATH, height=Inches(1.9))
-        cell.paragraphs[1].alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-        os.remove(TMP_FILE_PATH)
+        self.create_knowing_graph(doc, high_knowing, low_knowing, person_name, TMP_FILE_PATH, "knowing_graph")
 
         self.add_literals(doc, literals, person_name)
         # Save the document
@@ -417,6 +410,8 @@ class Docx_helper(ABC):
     def calculate_averages(self, combined_dfs):
 
         averages = {}
+        high_knowing = {}
+        low_knowing = {}
         counts = {}
         stds = {}
 
@@ -425,19 +420,25 @@ class Docx_helper(ABC):
             for person_name, group in combined_df.groupby("name"):
                 if person_name not in averages:
                     averages[person_name] = []
+                    high_knowing[person_name] = []
+                    low_knowing[person_name] = []
                     counts[person_name] = []
                     stds[person_name] = []
                 stds[person_name].append({})
                 averages[person_name].append({})
+                high_knowing[person_name].append({})
+                low_knowing[person_name].append({})
                 counts[person_name].append({})
                 stds[person_name][idx] = {}
                 averages[person_name][idx] = {}
+                high_knowing[person_name][idx] = {}
+                low_knowing[person_name][idx] = {}
                 counts[person_name][idx] = {1: {}, 2: {}, 3: {}}
 
                 numerical_columns = self.get_numerical_columns(combined_df)
                 
                 for category in numerical_columns:
-                    group = group[1 <= group[category] <= 6]
+                    group = group[(group[category] >= 1) & (group[category] <= 6)]
                     # Calculate new stds
                     std = group[category].std()
                     stds[person_name][idx][category] = std
@@ -446,6 +447,8 @@ class Docx_helper(ABC):
                     avg = group[category].mean()
                     averages[person_name][idx][category] = avg
                     
+                    high_knowing[person_name][idx][category] = group[group["knowing"] > 4][category].mean()
+                    low_knowing[person_name][idx][category] = group[group["knowing"] <= 4][category].mean()
                     # calculate count
                     for i in range(1, 4):
                         counts[person_name][idx][i][category] = group[group[category] == i].shape[0]
@@ -471,7 +474,7 @@ class Docx_helper(ABC):
                 averages["total"][idx][category] = np.average(all_avgs)
                 averages["range"][idx][category] = (min_total, max_total)
                 
-        return averages, stds, counts
+        return averages, stds, counts, high_knowing, low_knowing
 
     def get_literals(self, combined_df: pd.DataFrame) -> list:
 
@@ -497,11 +500,13 @@ class Docx_helper(ABC):
                           names_to_hashes: bool=False,
                           is_socio: bool = True):
         
-        averages, stds, counts = self.calculate_averages(combined_dfs)
+        averages, stds, counts, high_knowing, low_knowing = self.calculate_averages(combined_dfs)
         literals = self.get_literals(combined_dfs[-1])
         # create word file for every person
         for df in tqdm(combined_dfs[-1].groupby("name"), disable=not verbose):
             person_name = df[0]
             
-            self.create_word_file(averages, stds, counts, literals, person_name, n=df[1].shape[0], names_to_hashes=names_to_hashes)
+            self.create_word_file(averages, stds, counts, high_knowing,
+                                  low_knowing, literals, person_name,
+                                  n=df[1].shape[0], names_to_hashes=names_to_hashes)
         

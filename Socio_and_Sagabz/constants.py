@@ -1,7 +1,7 @@
 PERSONAL_CATEGORIES = ['responsibility', 'excellence', 'integrity', 'daring',
                        'mission', 'courtesy']
 PROFESSIONAL_CATEGORIES = ['knowing', 'intrapersonal', 'functioning in society', 'leadership', 'conduct', 'academy',
-                           'applicative knowledge', 'security', 'general']
+                           'applicative knowledge', 'security']
 
 CATEGORY_NAME_DICT = {'knowing': 'רמת היכרות', 'intrapersonal': 'בין אישי', 'functioning in society': 'תפקוד בחברה',
                         'leadership': 'הובלה',
@@ -15,5 +15,8 @@ COMMANDERSHIP_CATEGORIES = ['intrapersonal', 'functioning in society', 'leadersh
 PROFESSIONAL_GRAPH_CATEGORIES = ['academy', 'conduct', 'security', 'applicative knowledge']
 
 MAIN_CATEGORIES = ["intrapersonal", "functioning in society", "leadership", "conduct", "academy"]
-TABLE_CATEGORIES = ['knowing', 'intrapersonal', 'functioning in society', 'leadership', 'conduct', 'academy', 'security']
+TABLE_CATEGORIES = ['knowing', 'intrapersonal', 'functioning in society', 'leadership', 'conduct', 'academy', 'applicative knowledge', 'security']
+KNOWING_CATEGORIES = ['functioning in society', 'leadership', 'conduct', 'academy', 'applicative knowledge']
 SEMESTER = "ב"
+
+FONTSIZE = 20
