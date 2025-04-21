@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from cProfile import label
 from io import BytesIO
+from operator import imod
+from tempfile import template
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -132,7 +134,18 @@ class Docx_helper(ABC):
             cell = self.find_table_cell_by_tag(doc, type + category)
             if cell is not None:
                 # fill the cell with the data
+                text = ''.join(run.text for run in cell.paragraphs[0].runs)
+                split = text.split("{")
+                if len(split) != 2:
+                    raise ValueError(f"Cell with tag {type + category} contains a non 1 number of tags.")
+                before, after_with_tag = split
+                after = after_with_tag.split("}")[1]
                 cell.paragraphs[0].clear()
+                cell.paragraphs[0].add_run(before)
+                cell.paragraphs[0].runs[0].font.name = "David"
+                cell.paragraphs[0].runs[0].font.size = Pt(12)
+                cell.paragraphs[0].runs[0].bold = True
+
                 if category in values and values[category] is not None:
                     if isinstance(values[category], tuple):
                         cell.paragraphs[0].add_run(f"{values[category][0]:.1f}-{values[category][1]:.1f}")
@@ -140,17 +153,19 @@ class Docx_helper(ABC):
                         cell.paragraphs[0].add_run(f"{values[category]:.2f}".rstrip("0").rstrip("."))
                 else:
                     cell.paragraphs[0].add_run(" - ")
+                cell.paragraphs[0].add_run(after)
                 cell.paragraphs[0].runs[0].font.color.rgb = color
             else:
                 print(f"Cell with tag {type + category} not found in the document.")
     
-    def fill_main_table(self, doc: Document, averages, stds, person_name):
+    def fill_main_table(self, doc: Document, averages, stds, counts, person_name):
         # find the table in the document and fill it with data
         old_data = {} if len(averages[person_name]) == 1 else averages[person_name][-2]
         new_data = averages[person_name][-1]
         stds_data = stds[person_name][-1]
         total_data = averages["total"][-1]
         range_data = averages["range"][-1]
+        count_data = counts[person_name][-1]["total"]
         
         # fill the table with the data
         self.fill_row(doc, old_data, "old ")
@@ -158,6 +173,7 @@ class Docx_helper(ABC):
         self.fill_row(doc, stds_data, "std ")
         self.fill_row(doc, total_data, "total ")
         self.fill_row(doc, range_data, "range ")
+        self.fill_row(doc, count_data, "N ")
     
     def fill_values_table(self, doc: Document, counts, person_name: str):
         # find the table in the document and fill it with data
@@ -300,7 +316,6 @@ class Docx_helper(ABC):
         paragraph.add_run(title)
         paragraph.runs[0].bold = True
         paragraph.runs[0].underline = True
-        paragraph.runs[0] = "David"
         paragraph.runs[0].font.name = "David"
         paragraph.runs[0].font.size = Pt(14)
         paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
@@ -326,65 +341,38 @@ class Docx_helper(ABC):
         alignment.set(qn("w:val"), "left")
         pPr.append(alignment)
 
-    def add_literals(self, doc: Document, literals, person_name):
-        improve_cell = self.find_table_cell_by_tag(doc, "points to improve")
-        conserve_cell = self.find_table_cell_by_tag(doc, "points to conserve")
+    def add_literals(self, doc: DocxTemplate, literals, person_name, literal_ouptut_path):
+        context = {"improve": {"points": literals[person_name]["points to improve"]},
+                   "conserve": {"points": literals[person_name]["points to conserve"]}}
         
-        # Clear existing content
-        improve_cell.text = ""
-        conserve_cell.text = ""
+        context["improve"]["points"] = [ensure_ends_with(point, ".") for point in context["improve"]["points"] if (isinstance(point, str) and len(point) > 4)]
+        context["conserve"]["points"] = [ensure_ends_with(point, ".") for point in context["conserve"]["points"] if (isinstance(point, str) and len(point) > 4)]
         
-        def add_bullet_point(cell, text):
-            para = cell.add_paragraph(text)
-            
-            # Get paragraph properties
-            p_pr = para._element.get_or_add_pPr()
-            num_pr = OxmlElement("w:numPr")
-            
-            # Set list level (0 for top-level bullets)
-            ilvl = OxmlElement("w:ilvl")
-            ilvl.set(qn("w:val"), "0")
-            
-            # Set numId (1 links it to an automatic bullet list)
-            num_id = OxmlElement("w:numId")
-            num_id.set(qn("w:val"), "2")
-                        
-            # Append to paragraph properties
-            num_pr.append(ilvl)
-            num_pr.append(num_id)
-            p_pr.append(num_pr)
-            
-            return para
-
-        # Add bullet points for "points to improve"
-        for literal in literals[person_name]["points to improve"]:
-            para = add_bullet_point(improve_cell, literal)
-            self.set_rtl_paragraph(para)
-            para.style.font.name = "David"
-
-        # Add bullet points for "points to conserve"
-        for literal in literals[person_name]["points to conserve"]:
-            para = add_bullet_point(conserve_cell, literal)
-            para.style.font.name = "David"
-            self.set_rtl_paragraph(para)
+        doc.render(context)
+        doc.save(literal_ouptut_path)
+    
     
     def create_word_file(self, averages, stds, counts, high_knowing, low_knowing, literals, person_name, n=None, names_to_hashes=False):
         if names_to_hashes:
             with open("names_to_hashes.txt", "a", encoding="utf-8") as f:
-                f.write(f"{person_name} => {self.my_hash(person_name)}\n")
+                f.write(f"{person_name} ≥ {self.my_hash(person_name).encode('unicode_escape').decode('utf-8')}\n")
             title_to_save = f"{self.my_hash(person_name)} (N={n})".replace('"', '').replace("'", '') + ".docx"
         else:
             title_to_save = f"{person_name} (N={n})".replace('"', '').replace("'", '') + ".docx"
             
         path_to_save = os.path.join(self.word_output_dir, title_to_save)
 
-        doc = Document(self.file_format_path)
+        TEMP_FILE_PATH = "tmp.docx"
+        template = DocxTemplate(self.file_format_path)
+        self.add_literals(template, literals, person_name, TEMP_FILE_PATH)
+        
+        doc = Document(TEMP_FILE_PATH)
 
         # title and font
         title_str = "N=" + str(n) + " ," + "שיקוף סוציומטרי - " + person_name + ", סמסטר " + str(constants.SEMESTER)
         self.set_title(doc, title_str)
         
-        self.fill_main_table(doc, averages, stds, person_name)
+        self.fill_main_table(doc, averages, stds, counts, person_name)
         self.fill_values_table(doc, counts, person_name)
         self.fill_semester_table(doc, averages, person_name)
 
@@ -397,9 +385,9 @@ class Docx_helper(ABC):
         
         self.create_knowing_graph(doc, high_knowing, low_knowing, person_name, TMP_FILE_PATH, "knowing_graph")
 
-        self.add_literals(doc, literals, person_name)
         # Save the document
         doc.save(path_to_save)
+        os.remove(TEMP_FILE_PATH)
 
 
     def get_numerical_columns(self, df: pd.DataFrame) -> list:
@@ -433,7 +421,7 @@ class Docx_helper(ABC):
                 averages[person_name][idx] = {}
                 high_knowing[person_name][idx] = {}
                 low_knowing[person_name][idx] = {}
-                counts[person_name][idx] = {1: {}, 2: {}, 3: {}}
+                counts[person_name][idx] = {1: {}, 2: {}, 3: {}, "total": {}}
 
                 numerical_columns = self.get_numerical_columns(combined_df)
                 
@@ -452,6 +440,9 @@ class Docx_helper(ABC):
                     # calculate count
                     for i in range(1, 4):
                         counts[person_name][idx][i][category] = group[group[category] == i].shape[0]
+                    # calculate total count
+                    counts[person_name][idx]["total"][category] = group.shape[0]
+                    
 
             # Add a "total" person with the average of everyone
             if "total" not in averages:
