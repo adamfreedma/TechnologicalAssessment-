@@ -23,7 +23,8 @@ def generate_all_graphs(averages, stds):
     
     # Generate the correlation heatmap
     data = pd.read_excel("Excels/combined_data_2.xlsx")
-    correlation_heatmap(data)
+    correlation_heatmap(data, constants.PROFESSIONAL_CATEGORIES)
+    correlation_heatmap(data, constants.PERSONAL_CATEGORIES)
 
 
 def generate_groups(df, averages, categories=constants.PROFESSIONAL_CATEGORIES):
@@ -182,9 +183,8 @@ def pair_correlation(df, col1, col2):
     correlation = np.corrcoef(col1, col2)[0, 1]
     return correlation
 
-def correlation_heatmap(df):
+def correlation_heatmap(df, cols=constants.PROFESSIONAL_CATEGORIES):
     
-    cols = constants.TABLE_CATEGORIES
     cols_names = [constants.CATEGORY_NAME_DICT[x][::-1] for x in cols]
     corr_arr = np.zeros((len(cols), len(cols)))
 
