@@ -5,6 +5,10 @@ from operator import imod
 from tempfile import template
 
 import matplotlib.pyplot as plt
+import matplotlib
+
+import commander_file_helper
+matplotlib.rcParams['font.family'] = 'David'  # Set the font globally
 import pandas as pd
 import numpy as np
 from docx import Document
@@ -75,9 +79,11 @@ def add_in_the_beginning(sentence, add_on):
 
 def ensure_ends_with(sentence, add_on):
     if isinstance(sentence, str):
-        if sentence[-1] == " ":
+        if len(sentence) == 0:
+            pass
+        elif sentence[-1] == " ":
             sentence = sentence[:-1]
-        if sentence[-1] != add_on:
+        elif sentence[-1] != add_on:
             sentence += add_on
     sentence = fix_rtl_symbols(sentence)
     return sentence
@@ -142,19 +148,24 @@ class Docx_helper(ABC):
                 after = after_with_tag.split("}")[1]
                 cell.paragraphs[0].clear()
                 cell.paragraphs[0].add_run(before)
-                cell.paragraphs[0].runs[0].font.name = "David"
-                cell.paragraphs[0].runs[0].font.size = Pt(12)
-                cell.paragraphs[0].runs[0].bold = True
+
 
                 if category in values and values[category] is not None:
                     if isinstance(values[category], tuple):
                         cell.paragraphs[0].add_run(f"{values[category][0]:.1f}-{values[category][1]:.1f}")
                     else:
                         cell.paragraphs[0].add_run(f"{values[category]:.2f}".rstrip("0").rstrip("."))
+                        
                 else:
                     cell.paragraphs[0].add_run(" - ")
                 cell.paragraphs[0].add_run(after)
-                cell.paragraphs[0].runs[0].font.color.rgb = color
+                
+                for run in cell.paragraphs[0].runs:
+                    run.font.name = "David"
+                    run.font.size = Pt(12)
+                    run.bold = True
+                    if run.text != "0":
+                        run.font.color.rgb = color
             else:
                 print(f"Cell with tag {type + category} not found in the document.")
     
@@ -182,15 +193,15 @@ class Docx_helper(ABC):
         self.fill_row(doc, counts[person_name][-1][2], "neutral ",
                       categories=constants.PERSONAL_CATEGORIES)
         self.fill_row(doc, counts[person_name][-1][3], "positive ",
-                      categories=constants.PERSONAL_CATEGORIES, color=RGBColor(0, 255, 0))
+                      categories=constants.PERSONAL_CATEGORIES, color=RGBColor(0, 176, 80))
         
     def fill_semester_table(self, doc: Document, averages, person_name: str):
         
         for i in range(1, len(averages[person_name]) + 1):
             self.fill_row(doc, averages[person_name][-i], f"{i} ", categories=constants.TABLE_CATEGORIES)
     
-    def create_main_graph(self, doc, averages, stds, person_name, path_to_save, tag, categories=constants.MAIN_CATEGORIES, scale=6):
-        fig, ax = plt.subplots(figsize=(14, 7))
+    def create_main_graph(self, doc, averages, stds, person_name, path_to_save, tag, categories=constants.MAIN_CATEGORIES, scale=6, title=""):
+        fig, ax = plt.subplots(figsize=(20, 10))
 
         # Plot settings
         y_pos = np.arange(len(categories))
@@ -208,7 +219,8 @@ class Docx_helper(ABC):
         plt.gca().invert_yaxis()  # Invert y-axis to match typical bar chart order
 
         # save the figure
-        plt.xlim(0, scale + 0.5)
+        plt.xlim(1, scale)
+        plt.title(title[::-1], fontsize=constants.FONTSIZE)
         plt.savefig(path_to_save, bbox_inches='tight')
         plt.close(fig)
         
@@ -248,7 +260,7 @@ class Docx_helper(ABC):
         x = np.arange(len(constants.KNOWING_CATEGORIES)) * (1 + spacing)
 
         # Create the plot
-        fig, ax = plt.subplots(figsize=(14, 7))
+        fig, ax = plt.subplots(figsize=(20, 10))
         high_knowing_list = [high_knowing[person_name][-1][category] for category in constants.KNOWING_CATEGORIES]
         low_knowing_list = [low_knowing[person_name][-1][category] for category in constants.KNOWING_CATEGORIES]
         bars1 = ax.bar(x - bar_width, high_knowing_list, bar_width, label='מידת היכרות גבוהה < 4'[::-1], color='#ADD8E6')  # Light blue
@@ -264,8 +276,9 @@ class Docx_helper(ABC):
         ax.legend(fontsize=constants.FONTSIZE)
 
         # Show the plot
+        plt.title("גרף היכרות, מדדים מפוצלים למידת היכרות נמוכה וגבוהה"[::-1] + '\n', fontsize=constants.FONTSIZE)
         plt.tight_layout()
-        plt.ylim(0, 6.5)
+        plt.ylim(1, 6)
         plt.savefig(path_to_save, bbox_inches='tight')
         plt.close(fig)
         
@@ -280,10 +293,9 @@ class Docx_helper(ABC):
 
         x = np.arange(2) * (1 + spacing)
         # Create the plot
-        fig, ax = plt.subplots(figsize=(14, 7))
+        fig, ax = plt.subplots(figsize=(24, 10))
         
         semester_count = len(averages[person_name])
-        
         for i in range(semester_count):
             commandership = np.average([averages[person_name][i][category] for category in constants.COMMANDERSHIP_CATEGORIES])
             professionalism = np.average([averages[person_name][i][category] for category in constants.PROFESSIONAL_GRAPH_CATEGORIES])
@@ -293,17 +305,14 @@ class Docx_helper(ABC):
                 height = bar.get_height()
                 ax.text(bar.get_x() + bar.get_width()/2, height, f'{height:.2f}', ha='center', va='bottom', fontsize=constants.FONTSIZE, color='black')
             
-        for i in range(semester_count):
-            commandership = np.average([averages["total"][i][category] for category in constants.COMMANDERSHIP_CATEGORIES])
-            professionalism = np.average([averages["total"][i][category] for category in constants.PROFESSIONAL_GRAPH_CATEGORIES])
-        
         
         ax.set_xticks(x + bar_width * (semester_count - 1) / 2)
         ax.set_xticklabels(["מנהיגות"[::-1], "מקצועיות"[::-1]], rotation=45, ha='right', fontsize=constants.FONTSIZE)  # Align to right for Hebrew
         ax.tick_params(axis='y', labelsize=constants.FONTSIZE)
         ax.legend(fontsize=constants.FONTSIZE)
         plt.tight_layout()
-        plt.ylim(0, 6.5)
+        plt.title("ממוצעים לאורך סמסטרים"[::-1], fontsize=constants.FONTSIZE)
+        plt.ylim(1, 6.3)
         plt.savefig(path_to_save, bbox_inches='tight')
         plt.close(fig)
 
@@ -340,6 +349,12 @@ class Docx_helper(ABC):
         alignment = OxmlElement("w:jc")
         alignment.set(qn("w:val"), "left")
         pPr.append(alignment)
+
+    def replace_braces(self, val: str) -> str:
+        """ switches each brace to the opposite brace """
+        if isinstance(val, str):
+            val = val.translate(str.maketrans({"(": ")", ")": "(", "{": "}", "}": "{", "[": "]", "]": "["}))
+        return val
 
     def add_literals(self, doc: DocxTemplate, literals, person_name, literal_ouptut_path):
         context = {"improve": {"points": literals[person_name]["points to improve"]},
@@ -378,8 +393,7 @@ class Docx_helper(ABC):
 
         # add the main graph to the table
         TMP_FILE_PATH = "tmp.png"
-        self.create_main_graph(doc, averages, stds, person_name, TMP_FILE_PATH, "main_graph_professional", categories=constants.PROFESSIONAL_CATEGORIES)
-        self.create_main_graph(doc, averages, stds, person_name, TMP_FILE_PATH, "main_graph_personal", categories=constants.PERSONAL_CATEGORIES, scale=3)
+        self.create_main_graph(doc, averages, stds, person_name, TMP_FILE_PATH, "main_graph_professional", categories=constants.PROFESSIONAL_CATEGORIES, title="מדדים ביצועיים")
                 
         self.create_progress_graph(doc, averages, person_name, TMP_FILE_PATH, "progress_graph")
         
@@ -437,6 +451,7 @@ class Docx_helper(ABC):
                     
                     high_knowing[person_name][idx][category] = group[group["knowing"] > 4][category].mean()
                     low_knowing[person_name][idx][category] = group[group["knowing"] <= 4][category].mean()
+                    
                     # calculate count
                     for i in range(1, 4):
                         counts[person_name][idx][i][category] = group[group[category] == i].shape[0]
@@ -457,6 +472,8 @@ class Docx_helper(ABC):
             averages["total"][idx] = {}
             averages["range"].append({})
             averages["range"][idx] = {}
+            stds["total"].append({})
+            stds["total"][idx] = {}
             for category in numerical_columns:
                 all_avgs = [averages[name][idx][category] for name in
                             averages.keys() if name not in ["total", "range"]]
@@ -464,6 +481,8 @@ class Docx_helper(ABC):
                 max_total = max(all_avgs)
                 averages["total"][idx][category] = np.average(all_avgs)
                 averages["range"][idx][category] = (min_total, max_total)
+                
+                stds["total"][idx][category] = np.std(all_avgs)
                 
         return averages, stds, counts, high_knowing, low_knowing
 
@@ -477,8 +496,15 @@ class Docx_helper(ABC):
                 literals[person_name] = {"points to conserve": [], "points to improve": []}
             
             for category in literal_columns:
-                literals[person_name][category].extend(group[category].dropna().array)
-                
+                for index, value in group[category].dropna().items():
+                    knowing_value = group.loc[index, "knowing"]
+                    value = ensure_ends_with(value, ADD_IN_END_OF_SENTENCE)
+                    
+                    if knowing_value > 4:
+                        literals[person_name][category].append(self.replace_braces(f"{value} (מידת היכרות גבוהה)"))
+                    else:
+                        literals[person_name][category].append(self.replace_braces(f"{value} (מידת היכרות נמוכה)"))
+            
         return literals
             
     def run_word_creation(self,
@@ -492,6 +518,10 @@ class Docx_helper(ABC):
                           is_socio: bool = True):
         
         averages, stds, counts, high_knowing, low_knowing = self.calculate_averages(combined_dfs)
+        
+        # generate commander file graphs
+        # commander_file_helper.generate_all_graphs(averages, stds)
+        
         literals = self.get_literals(combined_dfs[-1])
         # create word file for every person
         for df in tqdm(combined_dfs[-1].groupby("name"), disable=not verbose):
@@ -499,5 +529,4 @@ class Docx_helper(ABC):
             
             self.create_word_file(averages, stds, counts, high_knowing,
                                   low_knowing, literals, person_name,
-                                  n=df[1].shape[0], names_to_hashes=names_to_hashes)
-        
+                                  n=df[1].shape[0])

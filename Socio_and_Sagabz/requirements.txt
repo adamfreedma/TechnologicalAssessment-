@@ -8,3 +8,5 @@ python-dotenv
 python_docx
 tqdm
 google-generativeai
+pymupdf
+comtypes
