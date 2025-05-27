@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
 from cProfile import label
 from io import BytesIO
-from operator import imod
+from itertools import count
+from math import e
+from operator import imod, le
 from tempfile import template
 
 import matplotlib.pyplot as plt
@@ -197,8 +199,8 @@ class Docx_helper(ABC):
         
     def fill_semester_table(self, doc: Document, averages, person_name: str):
         
-        for i in range(1, len(averages[person_name]) + 1):
-            self.fill_row(doc, averages[person_name][-i], f"{i} ", categories=constants.TABLE_CATEGORIES)
+        for i in range(len(averages[person_name])):
+            self.fill_row(doc, averages[person_name][i], f"{i+1} ", categories=constants.TABLE_CATEGORIES)
     
     def create_main_graph(self, doc, averages, stds, person_name, path_to_save, tag, categories=constants.MAIN_CATEGORIES, scale=6, title=""):
         fig, ax = plt.subplots(figsize=(20, 10))
@@ -206,6 +208,9 @@ class Docx_helper(ABC):
         # Plot settings
         y_pos = np.arange(len(categories))
         avg_values = [averages[person_name][-1].get(category, 0) for category in categories]
+        
+        if person_name == "נועם קורדובה":
+            print(avg_values, "noam cordoba")
         total_avg_values = [averages["total"][-1].get(category, 0) for category in categories]
         std_values = [stds[person_name][-1].get(category, 0) for category in categories]
         ax.barh(y_pos, total_avg_values, align='center', color='skyblue', edgecolor='black', label='ממוצע מחזורי'[::-1])
@@ -418,70 +423,121 @@ class Docx_helper(ABC):
         stds = {}
 
         # Calculate stds and averages for each person in the combined_df
+        last_combined_df = combined_dfs[-1]
+        last_df_names = last_combined_df["name"].unique()
         for idx, combined_df in enumerate(combined_dfs):
+            
+            counts["total"] = [{0: {}, 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, "total": {}}] * len(combined_df)
+            for i in range(7):
+                for category in constants.CATEGORY_NAME_DICT.keys():
+                    counts["total"][idx][i][category] = combined_df[combined_df[category] == i].shape[0]
+            
             for person_name, group in combined_df.groupby("name"):
+
+                if person_name == "גלעד הרצברג":
+                    person_name = "גלעד הרצברג רבינוביץ'"
+                    
+                if person_name == "ליאם מור":
+                    person_name = "ליאם ארי מור"
+                    
+                if person_name == "אייל שלמה אפרימה":
+                    person_name = "אייל אפרימה"
+
+                if person_name == "אייל ווינטרויב":
+                    person_name = "אייל ויינטרוב"
+                    
+                if person_name == "איתי אהרון פייביש":
+                    person_name = "איתי פייביש"
+                    
+                if person_name == "אליאב מנחם אופטובסקי":
+                    person_name = "אליאב אופטובסקי"
+                    
+                if person_name == "זהר רטנר שרף":
+                    person_name = "זהר רטנר"
+                    
+                if person_name == "יואב סטרולוביץ":
+                    person_name = "יואב סטרולוביץ'"
+
+                if person_name == "עידו דיוידסון רומנו":
+                    person_name = "עידו רומנו"
+
+                if person_name == "תומר יוסף גרונר":
+                    person_name = "תומר גרונר"
+                
+                if person_name not in last_df_names:
+                    continue
+                                
                 if person_name not in averages:
                     averages[person_name] = []
                     high_knowing[person_name] = []
                     low_knowing[person_name] = []
-                    counts[person_name] = []
+                    
+                    if person_name != "total":
+                        counts[person_name] = []
+                    
                     stds[person_name] = []
                 stds[person_name].append({})
                 averages[person_name].append({})
                 high_knowing[person_name].append({})
                 low_knowing[person_name].append({})
-                counts[person_name].append({})
+                if person_name != "total":
+                    counts[person_name].append({})
+                    counts[person_name][idx] = {0: {}, 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, "total": {}}
                 stds[person_name][idx] = {}
                 averages[person_name][idx] = {}
                 high_knowing[person_name][idx] = {}
                 low_knowing[person_name][idx] = {}
-                counts[person_name][idx] = {1: {}, 2: {}, 3: {}, "total": {}}
 
                 numerical_columns = self.get_numerical_columns(combined_df)
                 
                 for category in numerical_columns:
-                    group = group[(group[category] >= 1) & (group[category] <= 6)]
+                    group_with_0 = group.copy()
+                    group_without_0 = group[(group[category] >= 1) & (group[category] <= 6)]
                     # Calculate new stds
-                    std = group[category].std()
+                    std = group_without_0[category].std()
                     stds[person_name][idx][category] = std
                     
                     # Calculate new averages
-                    avg = group[category].mean()
+                    avg = group_without_0[category].mean()
                     averages[person_name][idx][category] = avg
                     
-                    high_knowing[person_name][idx][category] = group[group["knowing"] > 4][category].mean()
-                    low_knowing[person_name][idx][category] = group[group["knowing"] <= 4][category].mean()
+                    high_knowing[person_name][idx][category] = group_without_0[group_without_0["knowing"] > 4][category].mean()
+                    low_knowing[person_name][idx][category] = group_without_0[group_without_0["knowing"] <= 4][category].mean()
                     
-                    # calculate count
-                    for i in range(1, 4):
-                        counts[person_name][idx][i][category] = group[group[category] == i].shape[0]
-                    # calculate total count
-                    counts[person_name][idx]["total"][category] = group.shape[0]
-                    
+                    if person_name != "total":
+                        # calculate count
+                        for i in range(1, 7):
+                            counts[person_name][idx][i][category] = group_without_0[group_without_0[category] == i].shape[0]
+                            
+                        # calculate total count
+                        counts[person_name][idx]["total"][category] = group_without_0.shape[0]
+                        
+
 
             # Add a "total" person with the average of everyone
             if "total" not in averages:
                 averages["total"] = []
-                counts["total"] = []
                 stds["total"] = []
                 averages["range"] = []
-                counts["range"] = []
                 stds["range"] = []
                 
             averages["total"].append({})
             averages["total"][idx] = {}
             averages["range"].append({})
             averages["range"][idx] = {}
+
             stds["total"].append({})
             stds["total"][idx] = {}
+            
             for category in numerical_columns:
                 all_avgs = [averages[name][idx][category] for name in
                             averages.keys() if name not in ["total", "range"]]
                 min_total = min(all_avgs)
                 max_total = max(all_avgs)
+                
                 averages["total"][idx][category] = np.average(all_avgs)
                 averages["range"][idx][category] = (min_total, max_total)
-                
+
                 stds["total"][idx][category] = np.std(all_avgs)
                 
         return averages, stds, counts, high_knowing, low_knowing
@@ -520,13 +576,13 @@ class Docx_helper(ABC):
         averages, stds, counts, high_knowing, low_knowing = self.calculate_averages(combined_dfs)
         
         # generate commander file graphs
-        # commander_file_helper.generate_all_graphs(averages, stds)
+        commander_file_helper.generate_all_graphs(averages, stds, counts)
         
-        literals = self.get_literals(combined_dfs[-1])
-        # create word file for every person
-        for df in tqdm(combined_dfs[-1].groupby("name"), disable=not verbose):
-            person_name = df[0]
+        # literals = self.get_literals(combined_dfs[-1])
+        # # create word file for every person
+        # for df in tqdm(combined_dfs[-1].groupby("name"), disable=not verbose):
+        #     person_name = df[0]
             
-            self.create_word_file(averages, stds, counts, high_knowing,
-                                  low_knowing, literals, person_name,
-                                  n=df[1].shape[0])
+        #     self.create_word_file(averages, stds, counts, high_knowing,
+        #                           low_knowing, literals, person_name,
+        #                           n=df[1].shape[0])

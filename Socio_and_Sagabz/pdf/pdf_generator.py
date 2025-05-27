@@ -1,3 +1,4 @@
+import shutil
 import fitz  # PyMuPDF
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
@@ -34,7 +35,7 @@ def create_overlay_with_box(overlay_path, rect, page_size, index):
 
     # Convert PyMuPDF coords to ReportLab coords
 
-    rect_base_width = 140
+    rect_base_width = 270
     total_width = rect.width + rect_base_width
 
     width = rect.width
@@ -55,6 +56,13 @@ def create_overlay_with_box(overlay_path, rect, page_size, index):
     a = c.acroForm.textfield(
         name=f'dynamic_box{index}',
         x=x, y=y, width=width + rect_base_width, height=height,
+        forceBorder=False, fillColor=colors.white, borderWidth=0,
+        fontSize=12,
+    )
+    # Add another text box a row below
+    b = c.acroForm.textfield(
+        name=f'dynamic_box_below{index}',
+        x=x, y=y - height - 2, width=width + rect_base_width, height=height,
         forceBorder=False, fillColor=colors.white, borderWidth=0,
         fontSize=12,
     )
@@ -93,11 +101,9 @@ def replace_blanks(input_file, output_file):
     for page_num in page_numbers:
         for rect in page_numbers[page_num]:
             overlay_name = f"overlay.pdf"
-            print(page_num, rect)
             if rect:
                 create_overlay_with_box(overlay_name, rect, letter, index=counter)
                 merge_overlay(pdf_file, overlay_name, output_file, page_num)
-                print("Textbox added successfully!")
             else:
                 print("Text not found.")
 
@@ -105,10 +111,26 @@ def replace_blanks(input_file, output_file):
             if pdf_file == base_pdf_file:
                 pdf_file = output_file
 
+import win32com.client
 from docx2pdf import convert
 
-def docx_to_pdf(input_path, output_path):
-    convert(input_path, output_path)
+
+def docx_to_pdf(docx_path, pdf_path):
+    # Start Microsoft Word application
+    word = win32com.client.Dispatch("Word.Application")
+    
+    # Make Word invisible (optional)
+    word.Visible = False
+    
+    # Open the .docx file
+    doc = word.Documents.Open(docx_path)
+    
+    # Save the document as a PDF
+    doc.SaveAs(pdf_path, FileFormat=17)  # 17 corresponds to PDF format in Word
+    
+    # Close the document and quit Word
+    doc.Close()
+    word.Quit()
 
 
     
@@ -145,8 +167,26 @@ def fix_textfield_alignment(input_pdf_path, output_pdf_path):
 
 
 if __name__ == "__main__":
-    docx_to_pdf("input.docx", "input.pdf")
-    replace_blanks("input.pdf", "output.pdf")
-    fix_textfield_alignment("output.pdf", "output.pdf")
-    os.remove("input.pdf")
-    os.remove("overlay.pdf")
+    for file in os.listdir("input/"):
+        if file.startswith("~$"):
+            os.remove(os.path.join("input/", file))
+    convert("input/")
+    
+    for file in os.listdir("input/"):
+        if file.endswith(".pdf"):
+            input_docx = os.path.join("input/", file)
+            shutil.move(input_docx, os.path.join("output/", file))
+    
+    for file in os.listdir("output/"):
+        if file.endswith(".pdf"):
+            input_pdf = os.path.join("output/", file)
+            output_pdf = "temp.pdf"
+            print(file)
+            
+            replace_blanks(input_pdf, output_pdf)
+            fix_textfield_alignment(output_pdf, output_pdf)
+            
+            os.remove(input_pdf)
+            os.remove("overlay.pdf")
+            os.rename(output_pdf, input_pdf)
+            print(f"Processed {input_pdf} and saved as {input_pdf}.")

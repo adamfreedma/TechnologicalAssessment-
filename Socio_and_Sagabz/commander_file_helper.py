@@ -1,4 +1,6 @@
+import math
 from re import split
+from turtle import st
 from typing import List
 import matplotlib.pyplot as plt
 import constants
@@ -7,24 +9,27 @@ import pandas as pd
 
 avg_person = "total"
 
-def generate_all_graphs(averages, stds):
+def generate_all_graphs(averages, stds, counts):
     file_path = "Excels/data.xlsx"
     df = pd.read_excel(file_path)
     
     
     
-    # Generate the average comparison graph
-    average_compare_graph(averages, stds, categories=constants.PROFESSIONAL_CATEGORIES)
-    average_compare_graph(averages, stds, categories=constants.PERSONAL_CATEGORIES)
+    # # Generate the average comparison graph
+    # average_compare_graph(averages, stds, categories=constants.PROFESSIONAL_CATEGORIES)
+    # average_compare_graph(averages, stds, categories=constants.PERSONAL_CATEGORIES)
 
-    # Generate the group comparison graphs
-    generate_groups(df, averages, categories=constants.PROFESSIONAL_CATEGORIES)
-    generate_groups(df, averages, categories=constants.PERSONAL_CATEGORIES)
+    # # Generate the group comparison graphs
+    # generate_groups(df, averages, categories=constants.PROFESSIONAL_CATEGORIES)
+    # generate_groups(df, averages, categories=constants.PERSONAL_CATEGORIES)
     
-    # Generate the correlation heatmap
+    # # Generate the correlation heatmap
     data = pd.read_excel("Excels/combined_data_2.xlsx")
     correlation_heatmap(data, constants.PROFESSIONAL_CATEGORIES)
     correlation_heatmap(data, constants.PERSONAL_CATEGORIES)
+    
+    # create_histograms(counts, constants.PROFESSIONAL_CATEGORIES)
+    # create_histograms(counts, constants.PERSONAL_CATEGORIES)
 
 
 def generate_groups(df, averages, categories=constants.PROFESSIONAL_CATEGORIES):
@@ -75,7 +80,15 @@ def average_compare_graph(averages, stds, categories=constants.PROFESSIONAL_CATE
     # Plot settings with error bars
     y_pos = np.arange(len(categories))
     bars = ax.barh(y_pos, avg_values, xerr=std_values, align='center', color='blue', edgecolor='black', alpha=0.6, label='ממוצע מחזורי'[::-1])
-
+    print("stds:", std_values)
+    print("names", categories)
+    # Add text next to the bars
+    for bar, value in zip(bars, avg_values):
+        if categories == constants.PROFESSIONAL_CATEGORIES:
+            ax.text(bar.get_width() + 0.1, bar.get_y() + bar.get_height() / 5, f"{value:.2f}", va='center', fontsize=constants.SMALL_FONTSIZE)
+        else:
+            ax.text(bar.get_width() + 0.04, bar.get_y() + bar.get_height() / 5, f"{value:.2f}", va='center', fontsize=constants.SMALL_FONTSIZE)
+            
     # Labels and formatting
     ax.set_yticks(y_pos)
     if categories == constants.PROFESSIONAL_CATEGORIES:
@@ -104,8 +117,16 @@ def average_compare_graph(averages, stds, categories=constants.PROFESSIONAL_CATE
     fig, ax = plt.subplots()
 
     # Add the overall average bar
-    ax.barh(y_pos, avg_values, align='center', color='blue', edgecolor='black', alpha=0.6, label='ממוצע מחזורי'[::-1])
-    ax.barh(y_pos, last_avg_values, align='center', color='green', edgecolor='black', alpha=0.6, label='ממוצע קודם'[::-1])
+    bars = ax.barh(y_pos, avg_values, align='center', color='blue', edgecolor='black', alpha=0.6, label='ממוצע מחזורי'[::-1])
+
+    # Add text next to the bars
+    for bar, value in zip(bars, avg_values):
+        ax.text(bar.get_width(), bar.get_y() + bar.get_height() - bar.get_height() / 5, f"{value:.2f}", va='center', fontsize=constants.SMALL_FONTSIZE)
+
+    bars = ax.barh(y_pos, last_avg_values, align='center', color='green', edgecolor='black', alpha=0.6, label='ממוצע קודם'[::-1])
+    
+    for bar, value in zip(bars, last_avg_values):
+        ax.text(bar.get_width(), bar.get_y() + bar.get_height() / 5, f"{value:.2f}", va='center', fontsize=constants.SMALL_FONTSIZE)
 
     # Update the legend to include both average and overall average
     avg_patch = plt.Line2D([0], [0], color='darkgreen', lw=4, label='ממוצע מחזורי'[::-1])
@@ -126,45 +147,73 @@ def average_compare_graph(averages, stds, categories=constants.PROFESSIONAL_CATE
 
 def split_bar_graphs(groups: List[List[str]], names: List[str], averages, title: str, categories=constants.PROFESSIONAL_CATEGORIES):
     fig, ax = plt.subplots(figsize=(10, 7))
+    
+    # add the average group
+    groups.append([avg_person])
+    names.append("ממוצע מחזורי")
 
     # Calculate averages and standard deviations for each group
     group_avg_values = [
         [np.mean([averages[g][-1].get(category, 0) for g in group]) for category in categories]
         for group in groups
     ]
-    group_std_values = [
-        [np.std([averages[g][-1].get(category, 0) for g in group]) for category in categories]
-        for group in groups
-    ]
+    # group_std_values = [
+    #     [np.std([averages[g][-1].get(category, 0) for g in group]) for category in categories]
+    #     for group in groups
+    # ]
 
     # Bar width and positions
-    bar_width = 0.55 - 0.1 * len(groups)  # Adjust bar width based on number of groups
+    bar_width = 0.8 / len(groups)  # Adjust bar width based on number of groups
     x_pos = np.arange(len(categories))
 
     # Plot bars for each group
-    for i, (avg_values, std_values) in enumerate(zip(group_avg_values, group_std_values)):
-        ax.bar(
-            x_pos + i * bar_width,
-            avg_values,
-            yerr=std_values,
+    for i, avg_value in enumerate(group_avg_values):
+        bars = ax.bar(
+            x_pos + i * bar_width - (len(groups) - 1) * bar_width / 2,
+            avg_value,
             width=bar_width,
             align='center',
             label=names[i][::-1],
             alpha=0.6,
             edgecolor='black'
         )
+        # Add text above each bar
+        for bar, value in zip(bars, avg_value):
+            if categories == constants.PROFESSIONAL_CATEGORIES:
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    bar.get_height() + 0.05,
+                    f"{value:.2f}",
+                    ha='center',
+                    va='bottom',
+                    fontsize=constants.SMALL_FONTSIZE / math.pow(len(groups), 1 / 2)  # Scale down font size
+                )
+            else:
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    bar.get_height() + 0.02,
+                    f"{value:.2f}",
+                    ha='center',
+                    va='bottom',
+                    fontsize=constants.SMALL_FONTSIZE / math.pow(len(groups), 1 / 2)  # Scale down font size
+                )
 
     # Labels and formatting
-    ax.set_xticks(x_pos + bar_width / 2)
+    ax.set_xticks(x_pos)
     ax.set_xticklabels(
         [constants.CATEGORY_NAME_DICT[categories[j]][::-1] for j in range(len(categories))],
-        fontsize=constants.SMALL_FONTSIZE
+        fontsize=constants.SMALL_FONTSIZE * 0.8  # Scale down font size
     )
-    ax.tick_params(axis='y', labelsize=constants.SMALL_FONTSIZE)
-    ax.legend(fontsize=constants.SMALL_FONTSIZE)
+    if categories == constants.PROFESSIONAL_CATEGORIES:
+        ax.set_ylim(1, 6)
+    else:
+        ax.set_ylim(1, 3)
+    
+    ax.tick_params(axis='y', labelsize=constants.SMALL_FONTSIZE * 0.8)  # Scale down font size
+    ax.legend(fontsize=constants.SMALL_FONTSIZE * 0.8, loc='lower right')  # Scale down font size
 
     # Title and layout
-    ax.set_title(title[::-1], fontsize=constants.SMALL_FONTSIZE)
+    ax.set_title(title[::-1], fontsize=constants.SMALL_FONTSIZE * 0.8)  # Scale down font size
     plt.tight_layout()
     plt.show()
     
@@ -213,3 +262,29 @@ def correlation_heatmap(df, cols=constants.PROFESSIONAL_CATEGORIES):
 
     plt.tight_layout()
     plt.show()
+    
+    
+def create_histograms(counts, categories):
+    """
+    Create histograms for each category in the given counts dictionary.
+    """
+    idx = 0
+    for category in categories:
+        # Extract the data for the current category
+        if category in constants.PROFESSIONAL_CATEGORIES:
+            data = [counts[avg_person][-1][i][category] for i in range(7)]
+        else:
+            data = [counts[avg_person][-1][i][category] for i in range(4)]
+
+        # Create a bar plot
+        plt.figure(figsize=(10, 6))
+        plt.bar(range(len(data)), data, color='blue', alpha=0.6, edgecolor='black')
+        plt.title(f"התפלגות הערכות למדד {constants.CATEGORY_NAME_DICT[category]}"[::-1])
+        plt.xlabel("ציון"[::-1])
+        if categories == constants.PROFESSIONAL_CATEGORIES:
+            plt.xticks((0, 1, 2, 3, 4, 5, 6))
+        else:
+            plt.xticks((0, 1, 2, 3))
+        plt.ylabel("כמות הערכות"[::-1])
+        plt.grid(axis='y', alpha=0.75)
+        plt.show()
