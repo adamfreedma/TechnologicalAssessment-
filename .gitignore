@@ -6,3 +6,9 @@ flow.md
 *.xlsx
 names_to_hashes.txt
 settings.json
+Socio_and_Sagabz/pdf/input/*
+Socio_and_Sagabz/pdf/output/*
+Socio_and_Sagabz/pdf/input_new/*
+Socio_and_Sagabz/pdf/word_input/*
+
+tmp.docx
