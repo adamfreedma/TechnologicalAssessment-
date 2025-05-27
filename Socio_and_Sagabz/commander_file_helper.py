@@ -20,16 +20,16 @@ def generate_all_graphs(averages, stds, counts):
     # average_compare_graph(averages, stds, categories=constants.PERSONAL_CATEGORIES)
 
     # # Generate the group comparison graphs
-    # generate_groups(df, averages, categories=constants.PROFESSIONAL_CATEGORIES)
-    # generate_groups(df, averages, categories=constants.PERSONAL_CATEGORIES)
+    generate_groups(df, averages, categories=constants.PROFESSIONAL_CATEGORIES)
+    generate_groups(df, averages, categories=constants.PERSONAL_CATEGORIES)
     
     # # Generate the correlation heatmap
     data = pd.read_excel("Excels/combined_data_2.xlsx")
     correlation_heatmap(data, constants.PROFESSIONAL_CATEGORIES)
     correlation_heatmap(data, constants.PERSONAL_CATEGORIES)
     
-    # create_histograms(counts, constants.PROFESSIONAL_CATEGORIES)
-    # create_histograms(counts, constants.PERSONAL_CATEGORIES)
+    create_histograms(counts, constants.PROFESSIONAL_CATEGORIES)
+    create_histograms(counts, constants.PERSONAL_CATEGORIES)
 
 
 def generate_groups(df, averages, categories=constants.PROFESSIONAL_CATEGORIES):
@@ -44,30 +44,27 @@ def generate_groups(df, averages, categories=constants.PROFESSIONAL_CATEGORIES):
     split_bar_graphs([male_names, female_names], ["גברים", "נשים"], averages, "גרף השוואה בין מגדרים", categories)
     
     
-    boofor_names = df.loc[df['platoon'] == 'בופור', 'name'].tolist()
-    reim_names = df.loc[df['platoon'] == 'רעים', 'name'].tolist()
-    magen_names = df.loc[df['platoon'] == 'מגן', 'name'].tolist()
-    sufa_names = df.loc[df['platoon'] == 'סופה', 'name'].tolist()
-    
-    split_bar_graphs([boofor_names, reim_names, magen_names, sufa_names], ["בופור", "רעים", "מגן", "סופה"], averages, "גרף השוואה בין מחלקות", categories)
+    platoon_names = df['platoon'].unique().tolist()
+    platoon_names = [name for name in platoon_names if name != '']  # Remove empty platoon names
+    platoon_groups = [df.loc[df['platoon'] == name, 'name'].tolist() for name in platoon_names]
+    split_bar_graphs(platoon_groups, platoon_names, averages, "גרף השוואה בין מחלקות", categories)
     
     religous_names = df.loc[df['religious'] == 'דתי', 'name'].tolist()
     unreligous_names = list(all_names_set - set(religous_names))
     
     split_bar_graphs([religous_names, unreligous_names], ["דתיים", "חילוניים"], averages, "גרף השוואה בין דתיים לחילוניים", categories)
     
-    physics_names = df.loc[df['major'] == 'פיסיקה', 'name'].tolist()
-    math_names = df.loc[df['major'] == 'מתמטיקה', 'name'].tolist()
-    computer_names = df.loc[df['major'] == 'מדעי המחשב', 'name'].tolist()
+    # physics_names = df.loc[df['major'] == 'פיסיקה', 'name'].tolist()
+    # math_names = df.loc[df['major'] == 'מתמטיקה', 'name'].tolist()
+    # computer_names = df.loc[df['major'] == 'מדעי המחשב', 'name'].tolist()
     
-    split_bar_graphs([physics_names, math_names, computer_names], ["פיזיקה", "מתמטיקה", "מדעי המחשב"], averages, "גרף השוואה בין מסלולים", categories)
+    # split_bar_graphs([physics_names, math_names, computer_names], ["פיזיקה", "מתמטיקה", "מדעי המחשב"], averages, "גרף השוואה בין מסלולים", categories)
     
-    sterile_names = df.loc[df['background'] == 'סטרילי', 'name'].tolist()
-    light_proritorist_names = df.loc[df['background'] == 'פטוריסט קל', 'name'].tolist()
-    heavy_prtorist_names = df.loc[df['background'] == 'פטוריסט כבד', 'name'].tolist()
-    degree_names = df.loc[df['background'] == 'תאריסט', 'name'].tolist()
+    background_names = df['background'].unique().tolist()
+    background_names = [name for name in background_names if name != '']  # Remove empty background names
+    background_groups = [df.loc[df['background'] == name, 'name'].tolist() for name in background_names]
+    split_bar_graphs(background_groups, background_names, averages, "גרף השוואה בין רקעים אקדמיים", categories)
     
-    split_bar_graphs([sterile_names, light_proritorist_names, heavy_prtorist_names, degree_names], ["סטרילי", "פטוריסט קל", "פטוריסט כבד", "תאריסט"], averages, "גרף השוואה בין רקעים אקדמיים", categories)
     
 
 def average_compare_graph(averages, stds, categories=constants.PROFESSIONAL_CATEGORIES):
