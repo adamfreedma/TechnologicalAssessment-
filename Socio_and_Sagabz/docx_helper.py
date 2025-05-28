@@ -233,6 +233,11 @@ class Docx_helper(ABC):
     def fill_values_table(self, doc: Document, counts, person_name: str) -> None:
         """Fill the values table in the document with the counts for a specific person."""
         name_dict = {1: "negative ", 2: "neutral ", 3: "positive "}
+        color_dict = {
+            1: constants.RED_COLOR,
+            2: RGBColor(0, 0, 0),
+            3: constants.GREEN_COLOR,
+        }
 
         for value in range(1, 4):
             if value not in counts[person_name][-1]:
@@ -245,6 +250,7 @@ class Docx_helper(ABC):
                 counts[person_name][-1][value],
                 name_dict[value],
                 categories=constants.PERSONAL_CATEGORIES,
+                color=color_dict[value],
             )
 
     def fill_semester_table(self, doc: Document, averages, person_name: str) -> None:
@@ -335,7 +341,7 @@ class Docx_helper(ABC):
         cell.paragraphs[1].alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
 
         # remove png as it is no longer needed
-        os.remove(path_to_save)
+        # os.remove(path_to_save)
 
     def create_knowing_graph(
         self, doc, high_knowing, low_knowing, person_name, path_to_save, tag
@@ -594,7 +600,7 @@ class Docx_helper(ABC):
             averages,
             stds,
             person_name,
-            TMP_FILE_PATH,
+            "images/" + person_name + ".png",
             "main_graph_professional",
             categories=constants.PROFESSIONAL_CATEGORIES,
             title="מדדים ביצועיים",
