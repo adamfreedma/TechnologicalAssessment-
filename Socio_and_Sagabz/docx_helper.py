@@ -29,9 +29,8 @@ from docxtpl import DocxTemplate
 from docx.oxml import OxmlElement
 from docx.shared import RGBColor
 import docx
-
-
 import constants
+
 
 ADD_IN_END_OF_SENTENCE: str = "."
 IS_SOCIO = True
@@ -165,6 +164,13 @@ class Docx_helper(ABC):
         color=RGBColor(0, 0, 0),
     ) -> None:
 
+        if "commander" in categories:
+            categories.remove("commander")
+
+        if type in ["old ", "new ", "std ", "total ", "range ", "N "]:
+            categories.append("commander")
+            categories = set(categories)
+
         for category in categories:
 
             cell = self.find_table_cell_by_tag(doc, type + category)
@@ -185,10 +191,13 @@ class Docx_helper(ABC):
                 cell.paragraphs[0].clear()
                 cell.paragraphs[0].add_run(before)
 
+                if category == "commander":
+                    pass
+
                 if category in values and values[category] is not None:
                     if isinstance(values[category], tuple):
                         cell.paragraphs[0].add_run(
-                            f"{values[category][0]:.1f}-{values[category][1]:.1f}"
+                            f"{values[category][0]:.2f}-{values[category][1]:.2f}"
                         )
                     else:
                         cell.paragraphs[0].add_run(
@@ -277,7 +286,7 @@ class Docx_helper(ABC):
         title="",
     ) -> None:
         # Plot settings
-        fig, ax = plt.subplots(figsize=(20, 10))
+        fig, ax = plt.subplots(figsize=(23, 12))
 
         y_pos = np.arange(len(categories))
 
@@ -326,10 +335,14 @@ class Docx_helper(ABC):
         plt.savefig(path_to_save, bbox_inches="tight")
         plt.close(fig)
 
-        self.add_graph(doc, path_to_save, tag)
+        self.add_graph(doc, path_to_save, tag) # MARK IMPORTANT
 
     def add_graph(self, doc, path_to_save, tag) -> None:
         """Add a graph to the document in a specific cell identified by a tag."""
+        if doc is None:
+            print(f"Error: 'doc' object is None. Cannot add graph for tag: {tag}")
+            return
+
         cell = self.find_table_cell_by_tag(doc, tag)
 
         if cell is None:
@@ -337,7 +350,10 @@ class Docx_helper(ABC):
 
         # Clear the cell and add the image
         cell.paragraphs[0].clear()
-        cell.add_paragraph().add_run().add_picture(path_to_save, height=Inches(2.5))
+        if tag == "knowing_graph":
+            cell.add_paragraph().add_run().add_picture(path_to_save, height=Inches(3.5))
+        else:
+            cell.add_paragraph().add_run().add_picture(path_to_save, height=Inches(2.5))
         cell.paragraphs[1].alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
 
         # remove png as it is no longer needed
@@ -346,12 +362,12 @@ class Docx_helper(ABC):
     def create_knowing_graph(
         self, doc, high_knowing, low_knowing, person_name, path_to_save, tag
     ) -> None:
-        bar_width = 0.25
-        spacing = 0.1  # Extra spacing between groups
+        bar_width = 0.4  # 0.25 and 0.1
+        spacing = 0.15  # Extra spacing between groups
         x = np.arange(len(constants.KNOWING_CATEGORIES)) * (1 + spacing)
 
         # Create the plot
-        fig, ax = plt.subplots(figsize=(20, 10))
+        fig, ax = plt.subplots(figsize=(40, 30))
         high_knowing_list = [
             high_knowing[person_name][-1][category]
             for category in constants.KNOWING_CATEGORIES
@@ -384,22 +400,22 @@ class Docx_helper(ABC):
             for category in constants.KNOWING_CATEGORIES
         ]
         ax.set_xticklabels(
-            labels, rotation=45, ha="right", fontsize=constants.FONTSIZE
+            labels, rotation=45, ha="right", fontsize=2 * constants.FONTSIZE
         )  # Align to right for Hebrew
-        ax.tick_params(axis="y", labelsize=constants.FONTSIZE)
-        ax.legend(fontsize=constants.FONTSIZE)
+        ax.tick_params(axis="y", labelsize=2 * constants.FONTSIZE)
+        ax.legend(fontsize=2 * constants.FONTSIZE)
 
         # Show the plot
         plt.title(
             "גרף היכרות, מדדים מפוצלים למידת היכרות נמוכה וגבוהה"[::-1] + "\n",
-            fontsize=constants.FONTSIZE,
+            fontsize=2 * constants.FONTSIZE,
         )
         plt.tight_layout()
         plt.ylim(1, 6)
         plt.savefig(path_to_save, bbox_inches="tight")
         plt.close(fig)
 
-        self.add_graph(doc, path_to_save, tag)
+        self.add_graph(doc, path_to_save, tag) # MARK IMPORTANT
 
     def create_progress_graph(
         self, doc, averages, person_name, path_to_save, tag
@@ -513,7 +529,7 @@ class Docx_helper(ABC):
         return val
 
     def add_literals(
-        self, doc: DocxTemplate, literals, person_name, literal_ouptut_path
+            self, doc: DocxTemplate, literals, person_name, literal_ouptut_path
     ) -> None:
         """Add the literals to the document."""
         context = {
@@ -591,7 +607,7 @@ class Docx_helper(ABC):
 
         self.fill_main_table(doc, averages, stds, counts, person_name)
         self.fill_values_table(doc, counts, person_name)
-        self.fill_semester_table(doc, averages, person_name)
+        self.fill_semester_table(doc, averages, person_name) # MARK IMPORTANT
 
         # add the main graph to the table
         TMP_FILE_PATH = "tmp.png"
@@ -606,6 +622,7 @@ class Docx_helper(ABC):
             title="מדדים ביצועיים",
         )
 
+        # MARK IMPORTANT
         self.create_progress_graph(
             doc, averages, person_name, TMP_FILE_PATH, "progress_graph"
         )
@@ -648,6 +665,9 @@ class Docx_helper(ABC):
 
             for person_name, group in combined_df.groupby("name"):
 
+                # if person_name == "נדב לוי":
+                #     continue
+
                 name_fix_dict = {
                     "גלעד הרצברג": "גלעד הרצברג רבינוביץ'",
                     "ליאם מור": "ליאם ארי מור",
@@ -663,6 +683,7 @@ class Docx_helper(ABC):
 
                 if person_name in name_fix_dict:
                     person_name = name_fix_dict[person_name]
+                    print("enters")
 
                 if person_name not in last_df_names:
                     print(
@@ -687,8 +708,13 @@ class Docx_helper(ABC):
                 high_knowing[person_name].append({})
                 low_knowing[person_name].append({})
 
+
+
                 if person_name != "total":
                     counts[person_name].append({})
+
+
+
                     counts[person_name][idx] = {
                         0: {},
                         1: {},
@@ -758,6 +784,7 @@ class Docx_helper(ABC):
                 ]
                 min_total = min(all_avgs)
                 max_total = max(all_avgs)
+                print("the min and max are:", min_total, ", ", max(all_avgs))
 
                 averages["total"][idx][category] = np.average(all_avgs)
                 averages["range"][idx][category] = (min_total, max_total)
@@ -824,6 +851,31 @@ class Docx_helper(ABC):
             for df in tqdm(combined_dfs[-1].groupby("name"), disable=not verbose):
                 person_name = df[0]
 
+                # if person_name == "נדב לוי":
+                #     continue
+
+                self.create_main_graph(
+                    doc=None,
+                    averages=averages,
+                    stds=stds,
+                    person_name=person_name,
+                    path_to_save=f"images/{person_name}_main.png",
+                    tag=None,
+                    categories=constants.PROFESSIONAL_CATEGORIES,
+                    title="מדדים ביצועיים",
+                )
+
+                self.create_knowing_graph(
+                    doc=None,
+                    high_knowing=high_knowing,
+                    low_knowing=low_knowing,
+                    person_name=person_name,
+                    path_to_save=f"images/{person_name}_knowing.png",
+                    tag=None,
+                )
+
+                # continue
+
                 self.create_word_file(
                     averages,
                     stds,
@@ -834,3 +886,6 @@ class Docx_helper(ABC):
                     person_name,
                     n=df[1].shape[0],
                 )
+
+
+

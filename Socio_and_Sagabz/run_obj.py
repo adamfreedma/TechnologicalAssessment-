@@ -20,7 +20,7 @@ class SocioAndSagabz:
         format_path,
         testing=False,
         combine_excels=False,
-        run_classification=True,
+        run_classification=False,
         names_to_hashes=False,
         is_commander_file=False,
     ):

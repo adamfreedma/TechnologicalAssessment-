@@ -6,7 +6,8 @@ PERSONAL_CATEGORIES = [
     "integrity",
     "daring",
     "mission",
-    "courtesy",
+    "fellowship",
+    "humility",
 ]
 PROFESSIONAL_CATEGORIES = [
     "knowing",
@@ -22,18 +23,20 @@ PROFESSIONAL_CATEGORIES = [
 CATEGORY_NAME_DICT = {
     "knowing": "רמת היכרות",
     "intrapersonal": "יכולות תוך אישיות",
-    "functioning in society": "תפקוד בחברה",
+    "functioning in society": "יכולות בין אישיות",
     "leadership": "הובלה",
     "conduct": "ניהול והתנהלות",
     "academy": "מדעי אקדמי",
     "applicative knowledge": "מדעי יישומי",
     "security": "ביטחוני",
+    # "commander": "ביקורתיות אפקטיבית",
     "responsibility": "אחריות",
     "excellence": "מצוינות",
     "integrity": "יושרה",
     "daring": "העזה",
     "mission": "שליחות",
-    "courtesy": "דרך ארץ",
+    # "fellowship": "רעות",
+    # "humility": "ענווה",
     "general": "כללי",
 }
 OUTPUT_PATH = "output/"
@@ -57,15 +60,18 @@ TABLE_CATEGORIES = [
     "academy",
     "applicative knowledge",
     "security",
+    # "commander"
 ]
 KNOWING_CATEGORIES = [
+    "intrapersonal",
     "functioning in society",
     "leadership",
     "conduct",
     "academy",
     "applicative knowledge",
+    "security",
 ]
-SEMESTER = "ב"
+SEMESTER = "ג"
 
 
 FONTSIZE = 36

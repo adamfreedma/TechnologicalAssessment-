@@ -30,6 +30,11 @@ class PreProcess(ABC):
 
             df = pd.read_excel(os.path.join(self.input_dir, file_path))
             df = self.remove_unwanted_data(df)
+            print(len(df.columns))
+            print("##########################")
+            print(self.column_names)
+            print("##########################")
+            print(df)
             df = df.rename(columns={df.columns[i]: self.column_names[i] for i in range(len(self.column_names))})
 
             dataframes.append(df)
