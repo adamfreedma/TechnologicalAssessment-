@@ -51,6 +51,16 @@ MAIN_CATEGORIES = [
     "conduct",
     "academy",
 ]
+
+WORDED_CATEGORIES = [
+    "intrapersonal",
+    "outerpersonal",
+    "leadership",
+    "conduct",
+    "professionalism",
+    "other"
+]
+
 TABLE_CATEGORIES = [
     "knowing",
     "intrapersonal",
