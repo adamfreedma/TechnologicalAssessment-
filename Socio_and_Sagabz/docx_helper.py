@@ -6,6 +6,8 @@ from math import e
 from operator import imod, is_, le
 from tempfile import template
 
+from ai_classification import get_ai_classif
+
 import docx.table
 import docx.text
 import docx.text.paragraph
@@ -532,21 +534,25 @@ class Docx_helper(ABC):
             self, doc: DocxTemplate, literals, person_name, literal_ouptut_path
     ) -> None:
         """Add the literals to the document."""
-        context = {
-            "improve": {"points": literals[person_name]["points to improve"]},
-            "conserve": {"points": literals[person_name]["points to conserve"]},
-        }
+        main_categories = getattr(constants, "WORDED_CATEGORIES", [])
+        improve_by_category = {}
+        conserve_by_category = {}
 
-        context["improve"]["points"] = [
-            ensure_ends_with(point, ".")
-            for point in context["improve"]["points"]
-            if (isinstance(point, str) and len(point) > 4)
-        ]
-        context["conserve"]["points"] = [
-            ensure_ends_with(point, ".")
-            for point in context["conserve"]["points"]
-            if (isinstance(point, str) and len(point) > 4)
-        ]
+        for cat in main_categories:
+            improve_points = [p for p in literals[person_name]["points to improve"] if isinstance(p, dict) and len(p["text"]) > 4 and p["category"] == cat]
+            conserve_points = [p for p in literals[person_name]["points to conserve"] if isinstance(p, dict) and len(p["text"]) > 4 and p["category"] == cat]
+            improve_by_category[cat] = improve_points
+            conserve_by_category[cat] = conserve_points
+
+        improve_counts = {cat: len(improve_by_category[cat]) for cat in main_categories}
+        conserve_counts = {cat: len(conserve_by_category[cat]) for cat in main_categories}
+
+        context = {
+            "improve": improve_by_category,
+            "conserve": conserve_by_category,
+            "improve_counts": improve_counts,
+            "conserve_counts": conserve_counts,
+        }
 
         doc.render(context)
         doc.save(literal_ouptut_path)
@@ -793,8 +799,7 @@ class Docx_helper(ABC):
 
         return averages, stds, counts, high_knowing, low_knowing
 
-    def get_literals(self, combined_df: pd.DataFrame) -> list:
-
+    def get_literals(self, combined_df: pd.DataFrame) -> dict:
         # get the literal columns from the dataframe
         literal_columns = combined_df.columns.drop(
             self.get_numerical_columns(combined_df)
@@ -814,17 +819,18 @@ class Docx_helper(ABC):
                 for index, value in group[category].dropna().items():
                     knowing_value = group.loc[index, "knowing"]
                     value = ensure_ends_with(value, ADD_IN_END_OF_SENTENCE)
-
-                    # adding the corresponding finish based on the knowing value
-                    if knowing_value > 4:
-                        literals[person_name][category].append(
-                            self.replace_braces(f"{value} (מידת היכרות גבוהה)")
-                        )
-                    else:
-                        literals[person_name][category].append(
-                            self.replace_braces(f"{value} (מידת היכרות נמוכה)")
-                        )
-
+                    ai_classif = get_ai_classif(value, is_improve=(category == "points to improve"))  # returns a list of dicts with 'text' and 'category'
+                    for item in ai_classif:
+                        point_text = f"{item['text']} (מידת היכרות גבוהה)" if knowing_value > 4 else f"{item['text']} (מידת היכרות נמוכה)"
+                        point_text = fix_rtl_symbols(point_text)
+                        point_dict = {
+                            "text": self.replace_braces(point_text),
+                            "category": item['category']
+                        }
+                        if category == "points to improve":
+                            literals[person_name]["points to improve"].append(point_dict)
+                        elif category == "points to conserve":
+                            literals[person_name]["points to conserve"].append(point_dict)
         return literals
 
     def run_word_creation(
