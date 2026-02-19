@@ -31,41 +31,93 @@ def merge_consecutive_segments(segments):
 
 
 def get_ai_classif(sentence, is_improve = True):
-   
-    base_definitions = """
-    קטגוריות מותרות: ["מנהיגות", "התנהלות", "מקצועיות", "יכולות תוך אישיות", "יכולות בין אישיות", "אחר"]
-    1. מנהיגות: הובלת אנשים, כריזמה וסחיפת אחרים.
-    2. התנהלות: תעדוף, לו"ז, משמעת ונהלים.
-    3. מקצועיות: ידע, איכות ביצוע, יצירתיות.
-    4. יכולות תוך אישיות: ניהול עצמי, ויסות רגשי, בטחון, מוטיבציה.
-    5. יכולות בין אישיות: תקשורת, עבודת צוות, רגישות לזולת.
-    6. אחר: הערות טכניות או פניות אישיות.
+    improve_keywords_str = """
+    ### defenitions: 
+ מנהיגות - היכולת להנחות, לרתום ולהניע להשראה ולהוביל קבוצה או ארגון לקראת השגת מטרה. יכולת ליזום ולהתסכל על הדברים בצורה מערכתית, ולנהל תהליכים.
+ניהול והתנהלות - התנהלות נכונה מתייחסת למנגנונים פרקטיים לקבלת החלטות וניהול משאבים נכון. כמו כן לסדר וארגון, יהול זמנים וחלוקת משימות לפי תעדוף נכון. מנסה להרחיב תהליכים בהם הוא מעורב ולשפר ולהשתפר בתוך תפקידו.
+מקצועיות - היכולת לבצע משימות ברמה גבוהה, שימוש בידע ומיומנויות, הרחבה והעמקה של הידע שאותו אתה לומד. סקרנות בלמידה ובהבנה, יכולת חשיבה יצירתית.  
+יכולות תוך אישיות - היכולות הפנימיות של האדם מסתכל על ערכים תכונות, יכולת לנהל את עצמך, לזהות ולווסת את רגשותיך, ולהשתמש בערך עצמי והבנה לצמיחה ושיפור עצמי מתמיד.
+יכולות בין אישיות - מתייחסות לכישורים ומיומנויות המאפשרים לאדם לתקשר, לשתף פעולה ולנהל יחסים טובים עם אחרים וסביבתו. יכולת לנהל דיון קונפליקטים ומורכבויות בתוך קבוצה.
+    ### Keyword Dictionary (Strong Indicators):
+    Use these keywords to disambiguate:
+    1. **התנהלות (Conduct/Execution):** Keywords: "ניהול", "לנהל", "תכנון", "לו\"ז", "יומן", "סדר", "ארגון", "תעדוף", "יעיל", "חפשן", "מפוזר", "מבולגן".
+    2. **מקצועיות (Professionalism):** Keywords: "מקצועי", "ידע", "חריצות", "השקעה", "לומד", "ציונים", "אקדמיה",  "מוסר עבודה".
+    3. **יכולות בין אישיות (Interpersonal):** Keywords: "חבר", "נעים", ,"שחצן","מתנשא", "צוות",  "אחרים","עזרה", "להיפתח", "אכפתי", "מערכת יחסים".
+    4. **יכולות תוך אישיות (Intrapersonal):** Keywords: "שקט", "ביישן", "ביטחון עצמי", "הומור", ,"ציני", "מודעות עצמית", "לקחת ללב", "ענווה".
+    5. **מנהיגות (Leadership):** Keywords: "מוביל", "מנהיג", "כריזמה", "פיקוד", "יוזמה". (Focus on leading people or taking initiative).
     """
 
-    improve_prompt_content = f"""
-    משימה: סווג את המשפט הבא (סוג: {'שיפור/ביקורת' if is_improve else 'שימור/חיובי'}).
-    {base_definitions}
+    conserve_keywords_str = """
+    ### defenitions: 
+מנהיגות - היכולת להנחות, לרתום ולהניע להשראה ולהוביל קבוצה או ארגון לקראת השגת מטרה. יכולת ליזום ולהתסכל על הדברים בצורה מערכתית, ולנהל תהליכים.
+ניהול והתנהלות - התנהלות נכונה מתייחסת למנגנונים פרקטיים לקבלת החלטות וניהול משאבים נכון. כמו כן לסדר וארגון, יהול זמנים וחלוקת משימות לפי תעדוף נכון. מנסה להרחיב תהליכים בהם הוא מעורב ולשפר ולהשתפר בתוך תפקידו.
+מקצועיות - היכולת לבצע משימות ברמה גבוהה, שימוש בידע ומיומנויות, הרחבה והעמקה של הידע שאותו אתה לומד. סקרנות בלמידה ובהבנה, יכולת חשיבה יצירתית.  
+יכולות תוך אישיות - היכולות הפנימיות של האדם מסתכל על ערכים תכונות, יכולת לנהל את עצמך, לזהות ולווסת את רגשותיך, ולהשתמש בערך עצמי והבנה לצמיחה ושיפור עצמי מתמיד.
+יכולות בין אישיות - מתייחסות לכישורים ומיומנויות המאפשרים לאדם לתקשר, לשתף פעולה ולנהל יחסים טובים עם אחרים וסביבתו. יכולת לנהל דיון קונפליקטים ומורכבויות בתוך קבוצה.
 
-    הנחיות קריטיות:
-    - חובת סיווג: אסור להחזיר רשימה ריקה. השתמש ב-'אחר' כברירת מחדל.
-    - פיצול: פצל לסגמנטים נפרדים רק אם יש שינוי נושא מהותי (למשל מקצועיות מול חברה).
-    - איחוד: אל תפצל 'ריכוך' (כמו "אתה טוב אבל...") במשפטי שיפור.
-
-    Text: "{sentence}"
-    return json: {{ "segments": [ {{ "text": "חלק המשפט", "category": "שם הקטגוריה" }} ] }}
+    ### Keyword Dictionary (Strong Indicators):
+    Use these keywords to disambiguate:
+    1. **התנהלות (Conduct/Execution):** Keywords: "ניהול", "לנהל", "תכנון", "לו\"ז", "יומן", "סדר", "ארגון", "תעדוף", "יעיל", "ביצועיסט", "מתקתק", "כנס".
+    2. **מקצועיות (Professionalism):** Keywords: "מקצועי", "ידע", "רמה גבוהה", "חריצות", "השקעה", "לומד", "ציונים", "אקדמיה",  (Negative), "מוסר עבודה".
+    3. **יכולות בין אישיות (Interpersonal):** Keywords: "חבר", "נעים", "רגיש", "צוות", "עזרה", "קשוב", "אכפתי", "מערכת יחסים".
+    4. **יכולות תוך אישיות (Intrapersonal):** Keywords: "שקט", "ביישן", "ביטחון עצמי", "הומור", "ציני", "מודעות עצמית", "לקחת ללב", "ענווה".
+    5. **מנהיגות (Leadership):** Keywords: "מוביל", "מנהיג", "סוחף", "כריזמה", "פיקוד", "יוזמה". (Focus on leading people or taking initiative).
     """
 
+
+    system_instruction = """
+    You are an expert sociometric analyst. 
+    Your goal is to classify feedback sentences into 5 specific categories.
+    **Guideline:** Prefer holistic classification. Do not split the sentence unless there is a clear, distinct contradiction in topics.
+    """
+
+    user_prompt_conserve = f"""
+    Analyze the following conserve feedback: "{sentence}"
+
+    {conserve_keywords_str}
+
+    ### Logic Flow:
+    1. **Check Keywords and Defenitions:** Does the sentence contain specific keywords from the list above or match the definitions?
+    2. **Holistic View:** Can the whole sentence fit into one main category? If yes, do not split.
+    3. **Split Condition:** Split only if one part clearly discusses Skill X and another distinct part discusses Skill Y.
+
+    The allowed categories are {HEB_TO_ENG.keys()} (in Hebrew). If the sentence does not fit any category, classify it as "אחר" (other).
+
+    ### Output Format:
+    Return valid JSON only: {{ "segments": [ {{ "text": "...", "category": "..." }} ] }}
+    """
+
+
+    user_prompt_improve = f"""
+    Analyze the following improvement feedback: "{sentence}"
+
+    {improve_keywords_str}
+
+    ### Logic Flow:
+    1. **Check Keywords and Defenitions:** Does the sentence contain specific keywords from the list above or match the definitions?
+    2. **Holistic View:** Can the whole sentence fit into one main category? If yes, do not split.
+    3. **Split Condition:** Split only if one part clearly discusses Skill X and another distinct part discusses Skill Y.
+
+    The allowed categories are {HEB_TO_ENG.keys()} (in Hebrew). If the sentence does not fit any category, classify it as "אחר" (other).
+
+    ### Output Format:
+    Return valid JSON only: {{ "segments": [ {{ "text": "...", "category": "..." }} ] }}
+    """
     response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant that outputs strict JSON."},
-                {"role": "user", "content": improve_prompt_content }
-            ],
-            response_format={"type": "json_object"},
-            temperature=0
-        )
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": user_prompt_improve if is_improve else user_prompt_conserve}
+        ],
+        response_format={"type": "json_object"},
+        temperature=0
+    )
 
-    data = json.loads(response.choices[0].message.content)
+    content = response.choices[0].message.content
+    if content is None:
+        # Error handling: return default segment
+        return [{"text": sentence, "category": "other"}]
+    data = json.loads(content)
     raw_segments = data.get("segments", [])
     # Apply the merging logic here
     merged_segments = merge_consecutive_segments(raw_segments)
@@ -84,38 +136,3 @@ HEB_TO_ENG = {
     "יכולות בין אישיות": "intrapersonal",
     "אחר": "other"
 }
-# def extract_real_split(text):
-#     # Handles formats like '1. seq1 2. seq2', '1 seq1 2 seq2', etc.
-#     match = re.match(r'1\\.?\\s*(.*?)\\s*2\\.?\\s*(.*)', text)
-#     if match:
-#         return [match.group(1).strip(), match.group(2).strip()]
-#     return [text.strip()]
-# def main():
-#     df = pd.read_excel('splitting.xlsx')
-#     # Assume the sentences are in the first column
-#     sentences = df.iloc[:, 0].dropna().astype(str)
-#     with open('splitting_results.txt', 'w', encoding='utf-8') as f:
-#         for idx, sentence in enumerate(sentences, 1):
-#             ai_segments = get_ai_classif(sentence)
-#             ai_split = [seg['text'] for seg in ai_segments]
-#             real_split = extract_real_split(sentence)
-#             f.write(f"Sentence {idx}:\n")
-#             f.write(f"AI Split: {ai_split}\n")
-#             f.write(f"Real Split: {real_split}\n")
-#             f.write('-' * 40 + '\n')
-
-# if __name__ == '__main__':
-#     main()
-
-# def extract_full_sentence(text):
-#     """
-#     Extracts the full sentence from a string like '1. seq1 2. seq2' or '1 seq1 2 seq2'.
-#     Returns the concatenated sentence as a string.
-#     """
-#     # Find all sequences after '1' and '2' (with or without dot)
-#     matches = re.findall(r'(?:1\\.?\\s*)(.*?)(?:2\\.?\\s*)(.*)', text)
-#     if matches:
-#         seq1, seq2 = matches[0]
-#         return (seq1 + " " + seq2).strip()
-#     return text.strip()
-

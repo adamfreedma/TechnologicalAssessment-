@@ -813,6 +813,7 @@ class Docx_helper(ABC):
                     "points to conserve": [],
                     "points to improve": [],
                 }
+            print(f"Processing for {person_name}")
 
             # adding both improve and conserve points
             for category in literal_columns:
@@ -825,12 +826,21 @@ class Docx_helper(ABC):
                         point_text = fix_rtl_symbols(point_text)
                         point_dict = {
                             "text": self.replace_braces(point_text),
-                            "category": item['category']
+                            "category": item['category'],
+                            "knowing_value": knowing_value
                         }
                         if category == "points to improve":
                             literals[person_name]["points to improve"].append(point_dict)
                         elif category == "points to conserve":
                             literals[person_name]["points to conserve"].append(point_dict)
+
+        # Sort literals so all with knowing_value > 4 come first
+        for person_name in literals:
+            for cat in ["points to improve", "points to conserve"]:
+                literals[person_name][cat] = sorted(
+                    literals[person_name][cat],
+                    key=lambda x: 0 if x.get("knowing_value", 0) > 4 else 1
+                )
         return literals
 
     def run_word_creation(
